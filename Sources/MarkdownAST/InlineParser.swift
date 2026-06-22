@@ -68,6 +68,48 @@ struct InlineParser {
         return result
     }
 
+    /// Tokenizes `text` into emphasis/strikethrough delimiter runs (`*`/`_`, and
+    /// `~` runs of ≥2) and literal inline text. Adjacent text between delimiters
+    /// is merged into one `.literal(.text(...))`; a lone `~` is literal.
+    func tokenize(_ text: String) -> [InlineToken] {
+        let chars = Array(text)
+        var tokens: [InlineToken] = []
+        var buf = ""
+        func flushText() {
+            if !buf.isEmpty { tokens.append(.literal(.text(buf))); buf = "" }
+        }
+        var i = 0
+        while i < chars.count {
+            let c = chars[i]
+            if c == "\\", i + 1 < chars.count, Self.escapable.contains(chars[i + 1]) {
+                buf.append(chars[i + 1])
+                i += 2
+                continue
+            }
+            if c == "*" || c == "_" || c == "~" {
+                var n = 0
+                while i + n < chars.count, chars[i + n] == c { n += 1 }
+                if c == "~", n < 2 {
+                    buf.append(String(repeating: "~", count: n))
+                    i += n
+                    continue
+                }
+                let before: Character? = i > 0 ? chars[i - 1] : nil
+                let after: Character? = i + n < chars.count ? chars[i + n] : nil
+                let flank = classifyFlanking(char: c, before: before, after: after)
+                flushText()
+                tokens.append(.delim(char: c, count: n, origCount: n,
+                                     canOpen: flank.canOpen, canClose: flank.canClose))
+                i += n
+                continue
+            }
+            buf.append(c)
+            i += 1
+        }
+        flushText()
+        return tokens
+    }
+
     /// Finds the index of a closing backtick run of exactly `n` backticks at or
     /// after `start` (runs of other lengths are skipped as content), or nil.
     private func findClosingBacktickRun(_ chars: [Character], from start: Int, length n: Int) -> Int? {

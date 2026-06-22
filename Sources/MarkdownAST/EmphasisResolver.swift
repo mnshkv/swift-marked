@@ -4,6 +4,13 @@
 // and an adjacent-text coalescing pass. The canonical `process_emphasis`
 // pairing algorithm is a later task (Wave 8).
 
+/// A token in the inline emphasis pipeline: either a resolved inline node, or a
+/// run of emphasis/strikethrough delimiters awaiting pairing (Wave 8).
+enum InlineToken: Equatable {
+    case literal(MarkdownInline)
+    case delim(char: Character, count: Int, origCount: Int, canOpen: Bool, canClose: Bool)
+}
+
 /// CommonMark "punctuation": ASCII punctuation, or a Unicode punctuation/symbol
 /// character. (Swift's `isPunctuation` alone misses ASCII symbols like `~`.)
 func isCommonMarkPunctuation(_ c: Character?) -> Bool {
