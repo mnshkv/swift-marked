@@ -439,10 +439,35 @@ struct BlockParser {
                     break itemLoop // outer-indent block start (K3) ends the item
                 }
             }
-            let blocks = BlockParser(defs: defs).parse(itemLines, depth: depth + 1)
-            items.append(RawListItem(blocks: blocks, task: nil))
+            var itemBlocks = BlockParser(defs: defs).parse(itemLines, depth: depth + 1)
+            // GFM task list item: a leading `[ ]`/`[x]`/`[X]` checkbox in the
+            // item's first paragraph sets its task state and is stripped.
+            var task: TaskState?
+            if case .paragraph(let raw)? = itemBlocks.first,
+               let (state, stripped) = parseTaskMarker(raw) {
+                task = state
+                itemBlocks[0] = .paragraph(raw: stripped)
+            }
+            items.append(RawListItem(blocks: itemBlocks, task: task))
         }
         return (.list(RawList(kind: kind, isTight: !isLoose, items: items)), i)
+    }
+
+    /// Recognizes a GFM task-list checkbox (`[ ]`, `[x]`, `[X]`) at the start of
+    /// `raw`, returning the task state and the text with the marker stripped.
+    private func parseTaskMarker(_ raw: String) -> (TaskState, String)? {
+        let chars = Array(raw.prefix(3))
+        guard chars.count == 3, chars[0] == "[", chars[2] == "]" else { return nil }
+        let state: TaskState
+        switch chars[1] {
+        case " ": state = .unchecked
+        case "x", "X": state = .checked
+        default: return nil
+        }
+        // A space (or end of line) must follow the checkbox.
+        let rest = raw.dropFirst(3)
+        guard rest.isEmpty || rest.first == " " else { return nil }
+        return (state, String(rest.drop(while: { $0 == " " })))
     }
 
     /// Returns the setext-heading level (1 for `=`, 2 for `-`) if `line` is a
