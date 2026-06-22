@@ -356,7 +356,7 @@ struct BlockParser {
                 // only when `canInterruptParagraph` allows it (a bullet, or a
                 // `1.`-start ordered list, with a non-empty first item).
                 flush()
-                let (listBlock, next) = parseList(lines, from: i, firstMarker: firstMarker)
+                let (listBlock, next) = parseList(lines, from: i, firstMarker: firstMarker, depth: depth)
                 blocks.append(listBlock)
                 i = next - 1 // outer `i += 1` re-lands on the first unconsumed line
             }
@@ -370,23 +370,50 @@ struct BlockParser {
         return blocks
     }
 
-    /// Parses a flat (single-level) list starting at `arr[start]`, collecting
-    /// consecutive same-kind item markers. Returns the list and the next index.
-    private func parseList(_ arr: [String], from start: Int, firstMarker: ListMarker) -> (RawBlock, Int) {
+    /// Parses a list starting at `arr[start]`, collecting consecutive same-kind
+    /// items. Each item's lines (marker remainder + continuation/nested lines,
+    /// indent-stripped) are parsed recursively at `depth + 1` so nesting comes
+    /// for free. Returns the list and the index of the first unconsumed line.
+    private func parseList(_ arr: [String], from start: Int, firstMarker: ListMarker, depth: Int) -> (RawBlock, Int) {
         let kind = firstMarker.kind
         let bullet = firstMarker.bullet
         let delimiter = firstMarker.orderedDelimiter
         var items: [RawListItem] = []
         var i = start
         while i < arr.count {
-            // Same-kind continuation: same bullet char, or same ordered
-            // delimiter. A change in bullet/delimiter starts a separate list.
+            // Each item begins with a same-kind marker (same bullet char, or
+            // same ordered delimiter). A change in bullet/delimiter ends the list.
             guard let lm = listMarker(Substring(arr[i])),
                   lm.bullet == bullet, lm.orderedDelimiter == delimiter
             else { break }
-            let content = String(arr[i].dropFirst(lm.contentStart))
-            items.append(RawListItem(blocks: [.paragraph(raw: content)], task: nil))
+            let contentStart = lm.contentStart
+            // The marker remainder is the item's first content line.
+            var itemLines: [String] = [String(arr[i].dropFirst(contentStart))]
             i += 1
+            // Collect the rest of the item: lines indented to `contentStart`
+            // (indent stripped so nested constructs parse at depth+1), or lazy
+            // paragraph continuations (non-indented, non-block-start lines).
+            // Stop at a blank line, an outer-indent marker (next item / sibling
+            // list), or an outer-indent block start (K3).
+            while i < arr.count {
+                let cl = arr[i]
+                if isBlank(cl) { break }
+                var indent = 0
+                for ch in cl { if ch == " " { indent += 1 } else { break } }
+                if indent >= contentStart {
+                    itemLines.append(stripIndent(cl, indent: contentStart))
+                    i += 1
+                } else if listMarker(Substring(cl)) != nil {
+                    break
+                } else if !isBlockStart(Substring(cl)) {
+                    itemLines.append(cl) // lazy paragraph continuation
+                    i += 1
+                } else {
+                    break
+                }
+            }
+            let blocks = BlockParser(defs: defs).parse(itemLines, depth: depth + 1)
+            items.append(RawListItem(blocks: blocks, task: nil))
         }
         return (.list(RawList(kind: kind, isTight: true, items: items)), i)
     }

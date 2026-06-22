@@ -24,4 +24,40 @@ struct ListTests {
             ]))
         ])
     }
+
+    @Test("nested list inside an item (indented marker)")
+    func nestedList() {
+        let out = BlockParser(defs: DefinitionStore()).parse(["- a", "  - b"], depth: 0)
+        #expect(out == [
+            .list(RawList(kind: .bullet, isTight: true, items: [
+                RawListItem(blocks: [
+                    .paragraph(raw: "a"),
+                    .list(RawList(kind: .bullet, isTight: true, items: [
+                        RawListItem(blocks: [.paragraph(raw: "b")], task: nil),
+                    ])),
+                ], task: nil),
+            ])),
+        ])
+    }
+
+    @Test("non-indented block start after an item is a sibling, not nested")
+    func blockStartEndsItem() {
+        let out = BlockParser(defs: DefinitionStore()).parse(["- a", "# H"], depth: 0)
+        #expect(out == [
+            .list(RawList(kind: .bullet, isTight: true, items: [
+                RawListItem(blocks: [.paragraph(raw: "a")], task: nil),
+            ])),
+            .heading(level: 1, raw: "H"),
+        ])
+    }
+
+    @Test("non-indented plain line is a lazy continuation of the item")
+    func lazyContinuation() {
+        let out = BlockParser(defs: DefinitionStore()).parse(["- a", "lazy"], depth: 0)
+        #expect(out == [
+            .list(RawList(kind: .bullet, isTight: true, items: [
+                RawListItem(blocks: [.paragraph(raw: "a\nlazy")], task: nil),
+            ])),
+        ])
+    }
 }
