@@ -64,6 +64,42 @@ struct BlockParser {
                 // through and the outer `i += 1` advances past it. If it ended at
                 // EOF, `i == lines.count` and the outer loop terminates.
                 blocks.append(.codeBlock(language: fence.language, code: content.joined(separator: "\n")))
+            } else if let inner0 = blockquoteMarker(Substring(line)) {
+                // Block quotes interrupt a pending paragraph (CommonMark §5.1).
+                flush()
+                // Collect inner content lines: the first marker line (already
+                // stripped → `inner0`), then subsequent lines that either:
+                //  • have a blockquote marker (strip it → inner line, may be ""), OR
+                //  • are a lazy continuation: non-blank AND not a block-start
+                //    (K3/F4 guard — a heading/fence/new-list after `> para` starts
+                //    a SIBLING, not a quote continuation).
+                // A non-marker line that is blank or a block-start ENDS the quote;
+                // the line is left for the outer dispatcher (decrement i so the
+                // outer `i += 1` re-lands on it).
+                var inner: [String] = [String(inner0)]
+                i += 1
+                while i < lines.count {
+                    let cl = lines[i]
+                    if let stripped = blockquoteMarker(Substring(cl)) {
+                        inner.append(String(stripped))
+                        i += 1
+                    } else {
+                        let s = stripUpTo3Spaces(Substring(cl))
+                        if !s.isEmpty && !isBlockStart(Substring(cl)) {
+                            // Lazy continuation: include the line verbatim.
+                            inner.append(cl)
+                            i += 1
+                        } else {
+                            // Blank or block-start → end of quote; leave this line
+                            // for the outer loop. Step back so the outer `i += 1`
+                            // re-processes it.
+                            i -= 1
+                            break
+                        }
+                    }
+                }
+                let sub = BlockParser(defs: defs).parse(inner, depth: depth + 1)
+                blocks.append(.blockQuote(blocks: sub))
             } else {
                 pending.append(trimWhitespace(line))
             }
@@ -171,6 +207,33 @@ struct BlockParser {
         while let first = s.first, first.isWhitespace { s = s.dropFirst() }
         while let last = s.last, last.isWhitespace { s = s.dropLast() }
         return String(s)
+    }
+
+    // MARK: - Block quotes (CommonMark §5.1)
+
+    /// Recognizes a blockquote marker and returns the inner line (the content
+    /// after stripping the marker). Returns `nil` if `line` does not begin a
+    /// blockquote.
+    ///
+    /// Rules: 0–3 leading spaces (via `stripUpTo3Spaces`; 4+ ⇒ not a marker,
+    /// the line falls through to indented-code/paragraph handling); then a
+    /// leading `>`; then optionally ONE following space or tab is stripped
+    /// (only one — additional spaces are preserved as inner content).
+    ///
+    /// - `   > hello` → `hello`
+    /// - `>hello`     → `hello`
+    /// - `>  hello`   → ` hello`  (one space remains)
+    /// - `>`          → ``        (empty inner line — blank line in quote)
+    /// - `    > q`    → `nil`     (4 leading spaces ⇒ not a marker)
+    private func blockquoteMarker(_ line: Substring) -> Substring? {
+        let s = stripUpTo3Spaces(line)
+        guard s.first == ">" else { return nil }
+        var rest = s.dropFirst()
+        // Strip ONE optional following space or tab.
+        if rest.first == " " || rest.first == "\t" {
+            rest = rest.dropFirst()
+        }
+        return rest
     }
 
     // MARK: - Fenced code blocks (CommonMark §4.5)
