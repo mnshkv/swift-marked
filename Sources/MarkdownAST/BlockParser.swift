@@ -100,6 +100,24 @@ struct BlockParser {
                 }
                 let sub = BlockParser(defs: defs).parse(inner, depth: depth + 1)
                 blocks.append(.blockQuote(blocks: sub))
+            } else if pending.isEmpty, linkReferenceDefinition(line) {
+                // Link reference definition (CommonMark §6.1). Cannot interrupt
+                // a paragraph (§6.1 ex 213) — guarded by `pending.isEmpty`.
+                // Collected into `defs`; the line is removed from the block
+                // output (no RawBlock emitted). Just advance.
+                //
+                // Checked BEFORE the table branch: a `[^id]:` or `[label]:`
+                // line would otherwise be caught by the table branch (which
+                // tries a delimiter match on the next line, fails, and falls to
+                // paragraph-accumulate), swallowing the def into the paragraph.
+            } else if pending.isEmpty, let fn = footnoteDefinition(lines, from: i) {
+                // Footnote definition (extended syntax). Same paragraph-interrupt
+                // guard as link-ref-defs. The body (first line + indented
+                // continuation lines, blanks kept for multi-paragraph) is stored
+                // as raw lines; Pass B resolves them. Advance past consumed
+                // lines; the outer `i += 1` re-lands on the terminator (or EOF).
+                defs.addFootnote(id: fn.id, bodyLines: fn.bodyLines)
+                i += fn.consumed - 1
             } else if pending.isEmpty, i + 1 < lines.count {
                 // GFM table (§4.6). Tables cannot interrupt a paragraph (F7):
                 // only start one when the pending paragraph is empty. The
@@ -513,5 +531,177 @@ struct BlockParser {
         if isBlank(line) { return false }
         if detailLineContent(line) != nil { return false }
         return true
+    }
+
+    // MARK: - Link reference definitions (CommonMark §6.1)
+
+    /// Attempts to parse `line` as a link reference definition
+    /// `[label]: destination "title"`. On success, registers the definition in
+    /// `defs` and returns `true` (the line is removed from the block output).
+    /// On failure returns `false` (the line falls through to paragraph text).
+    ///
+    /// Rules (single-line; multi-line titles are a future extension):
+    /// - 0–3 leading spaces (4+ ⇒ not a link-ref-def).
+    /// - Label: `[` ... `]` (text between first `[` and first `]`). Must contain
+    ///   at least one non-whitespace char. `[^...]` (footnote) is rejected here
+    ///   — handled by `footnoteDefinition`.
+    /// - After `]`: a `:`, then optional whitespace.
+    /// - Destination: either a bare run of non-whitespace chars, or `<...>`
+    ///   (angle-bracket destination; `<` and `>` stripped, spaces allowed
+    ///   inside).
+    /// - Title (optional): `"..."`, `'...'`, or `(...)`. The quoting char is
+    ///   stripped. An empty title `""` is stored as `""` (not nil); absence of
+    ///   a title is stored as `nil`.
+    /// - Trailing-junk rejection (M11): after the title (or after the
+    ///   destination if no title), only trailing whitespace is allowed. Any
+    ///   non-whitespace leftover ⇒ the whole line is rejected.
+    private func linkReferenceDefinition(_ line: String) -> Bool {
+        let s = stripUpTo3Spaces(Substring(line))
+        guard s.first == "[" else { return false }
+        let afterOpen = s.dropFirst()
+        // `[^...]` is a footnote def, not a link-ref-def.
+        guard afterOpen.first != "^" else { return false }
+        // Find the closing `]` (simple scan — escaped `\]` not specially handled).
+        guard let closeIdx = afterOpen.firstIndex(of: "]") else { return false }
+        let label = String(afterOpen[afterOpen.startIndex..<closeIdx])
+        // Label must contain at least one non-whitespace character.
+        guard label.contains(where: { !$0.isWhitespace }) else { return false }
+
+        let afterClose = afterOpen[afterOpen.index(after: closeIdx)...]
+        guard afterClose.first == ":" else { return false }
+        let afterColon = afterClose.dropFirst()
+
+        // Skip optional whitespace before destination.
+        var rest = afterColon
+        while let f = rest.first, f.isWhitespace { rest = rest.dropFirst() }
+        guard !rest.isEmpty else { return false }
+
+        // Destination: bare or angle-bracketed.
+        let destination: String
+        if rest.first == "<" {
+            let afterAngle = rest.dropFirst()
+            guard let closeAngle = afterAngle.firstIndex(of: ">") else {
+                return false
+            }
+            destination = String(afterAngle[afterAngle.startIndex..<closeAngle])
+            rest = afterAngle[afterAngle.index(after: closeAngle)...]
+        } else {
+            var endIdx = rest.startIndex
+            while endIdx < rest.endIndex, !rest[endIdx].isWhitespace {
+                endIdx = rest.index(after: endIdx)
+            }
+            destination = String(rest[rest.startIndex..<endIdx])
+            rest = rest[endIdx...]
+        }
+
+        // Title (optional): skip whitespace, then a quoted/parenthesized string.
+        var afterDest = rest
+        while let f = afterDest.first, f.isWhitespace { afterDest = afterDest.dropFirst() }
+
+        var title: String? = nil
+        if !afterDest.isEmpty {
+            let q = afterDest.first!
+            if q == "\"" || q == "'" || q == "(" {
+                let closeChar: Character = (q == "(") ? ")" : q
+                let afterQuote = afterDest.dropFirst()
+                guard let titleClose = afterQuote.firstIndex(of: closeChar) else {
+                    return false
+                }
+                title = String(afterQuote[afterQuote.startIndex..<titleClose])
+                afterDest = afterQuote[afterQuote.index(after: titleClose)...]
+            } else {
+                // Non-whitespace after destination that isn't a title opener ⇒ junk.
+                return false
+            }
+        }
+
+        // Trailing-junk rejection: after title (or destination), only whitespace.
+        if !afterDest.allSatisfy({ $0.isWhitespace }) { return false }
+
+        defs.addLink(label: label, destination: destination, title: title)
+        return true
+    }
+
+    // MARK: - Footnote definitions (extended syntax)
+
+    /// Result of a successful footnote-definition parse.
+    private struct FootnoteParse {
+        let id: String
+        let bodyLines: [String]
+        /// Number of lines consumed (including the `[^id]:` first line).
+        let consumed: Int
+    }
+
+    /// Attempts to parse a footnote definition starting at `lines[start]`.
+    /// Format: `[^id]: body`. The body includes the first line's content plus
+    /// continuation lines indented ≥4 spaces (4 leading spaces stripped) and
+    /// blank lines that precede further indented content (multi-paragraph
+    /// support). On success returns the parsed footnote; on failure `nil`.
+    ///
+    /// Body collection:
+    /// - First line: content after `[^id]:` + one optional leading space.
+    /// - Continuation lines:
+    ///   - Indented ≥4 spaces (non-blank) → strip 4, append.
+    ///   - Blank → peek ahead: if the next non-blank line is indented ≥4,
+    ///     append `""` (multi-paragraph blank) and continue; otherwise the
+    ///     blank ends the body (NOT consumed — left for the outer loop).
+    ///   - Dedented (non-blank, <4 spaces) → body ends (NOT consumed).
+    /// `consumed` counts the first line + all consumed continuation lines. The
+    /// terminator (blank or dedented line) is NOT consumed; the caller adjusts
+    /// `i` so the outer `i += 1` re-lands on it.
+    private func footnoteDefinition(_ lines: [String], from start: Int) -> FootnoteParse? {
+        let line = lines[start]
+        let s = stripUpTo3Spaces(Substring(line))
+        guard s.first == "[" else { return nil }
+        let afterOpen = s.dropFirst()
+        guard afterOpen.first == "^" else { return nil }
+        let afterCaret = afterOpen.dropFirst()
+        guard let closeIdx = afterCaret.firstIndex(of: "]") else { return nil }
+        let id = String(afterCaret[afterCaret.startIndex..<closeIdx])
+        guard !id.isEmpty else { return nil }
+
+        let afterClose = afterCaret[afterCaret.index(after: closeIdx)...]
+        guard afterClose.first == ":" else { return nil }
+        let afterColon = afterClose.dropFirst()
+
+        // Strip one optional leading space from the first body line.
+        var firstBody = afterColon
+        if firstBody.first == " " { firstBody = firstBody.dropFirst() }
+        var bodyLines: [String] = [String(firstBody)]
+
+        var i = start + 1
+        while i < lines.count {
+            let cl = lines[i]
+            if isBlank(cl) {
+                // Peek past consecutive blanks to the next non-blank line.
+                var j = i + 1
+                while j < lines.count, isBlank(lines[j]) { j += 1 }
+                if j < lines.count, isIndentedBy4(lines[j]) {
+                    // Blank is part of the body (multi-paragraph separator).
+                    bodyLines.append("")
+                    i += 1
+                } else {
+                    // Blank ends the body; leave it for the outer loop.
+                    break
+                }
+            } else if isIndentedBy4(cl) {
+                bodyLines.append(String(cl.dropFirst(4)))
+                i += 1
+            } else {
+                // Dedented non-blank line → body ends; leave it for the outer loop.
+                break
+            }
+        }
+
+        return FootnoteParse(id: id, bodyLines: bodyLines, consumed: i - start)
+    }
+
+    /// True iff `line` has ≥4 leading space characters (tab-expanded input).
+    private func isIndentedBy4(_ line: String) -> Bool {
+        var count = 0
+        for ch in line {
+            if ch == " " { count += 1 } else { break }
+        }
+        return count >= 4
     }
 }
