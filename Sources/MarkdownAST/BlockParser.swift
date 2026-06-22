@@ -100,6 +100,55 @@ struct BlockParser {
                 }
                 let sub = BlockParser(defs: defs).parse(inner, depth: depth + 1)
                 blocks.append(.blockQuote(blocks: sub))
+            } else if pending.isEmpty
+                && i + 1 < lines.count
+                && delimiterAlignments(lines[i + 1]) != nil
+            {
+                // GFM table (§4.6). Tables cannot interrupt a paragraph (F7):
+                // only start one when the pending paragraph is empty. The
+                // header is `lines[i]`; the delimiter is `lines[i+1]` (already
+                // validated by `delimiterAlignments`); subsequent lines are
+                // data rows until a blank line or another block-start.
+                let headerCells = splitTableRow(line)
+                let alignments = delimiterAlignments(lines[i + 1])!
+                let width = headerCells.count
+
+                // Guard: the delimiter cell count must equal the header cell
+                // count (GFM spec). `delimiterAlignments` already produced a
+                // non-nil array, but its length is the delimiter's cell count;
+                // if it differs from the header width, this is not a table.
+                guard alignments.count == width else {
+                    pending.append(trimWhitespace(line))
+                    i += 1
+                    continue
+                }
+
+                i += 2 // advance past header + delimiter
+                var rows: [[String]] = []
+                while i < lines.count {
+                    let cl = lines[i]
+                    if isBlank(cl) || isBlockStart(Substring(cl)) {
+                        // The terminating line (blank or block-start) is left
+                        // for the outer dispatcher: step back so the outer
+                        // `i += 1` re-lands on it.
+                        i -= 1
+                        break
+                    }
+                    var cells = splitTableRow(cl)
+                    // Normalize cell count to header width: pad or truncate.
+                    if cells.count < width {
+                        cells.append(contentsOf: Array(repeating: "", count: width - cells.count))
+                    } else if cells.count > width {
+                        cells = Array(cells.prefix(width))
+                    }
+                    rows.append(cells)
+                    i += 1
+                }
+                blocks.append(.table(RawTable(
+                    alignments: alignments,
+                    header: [headerCells],
+                    rows: rows
+                )))
             } else {
                 pending.append(trimWhitespace(line))
             }
