@@ -58,6 +58,11 @@ func isBlockStart(_ line: Substring) -> Bool {
         // Minimal marker peek for interruption classification; full recognizer is T18.
         return isListMarkerPeek(s)
     }
+    // Underscore-led thematic break (e.g. `___`, `_ _ _`). Underscore is not
+    // a list marker, so the only construct to check is thematic break.
+    if first == "_" {
+        return isThematicBreak(s)
+    }
 
     // Ordered list marker: digit run.
     if first.isNumber && first.isASCII {
@@ -92,7 +97,7 @@ func canInterruptParagraph(_ line: Substring) -> Bool {
 
     // Thematic break (but NOT setext `---`, which would be caught here too —
     // thematic break requires the line to be only `-`,`*`,`_` + spaces).
-    if first == "-" || first == "*" {
+    if first == "-" || first == "*" || first == "_" {
         if isThematicBreak(s) { return true }
     }
     // `*` could be a list marker; `-` could be a list marker.

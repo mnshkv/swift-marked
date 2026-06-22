@@ -54,6 +54,13 @@ struct ContainersTests {
         #expect(isBlockStart("- - -"))
     }
 
+    @Test("underscore-led thematic break is block start")
+    func underscoreThematicBreakIsBlockStart() {
+        #expect(isBlockStart("___"))
+        #expect(isBlockStart("_ _ _"))
+        #expect(!isBlockStart("_not_a_break"))
+    }
+
     @Test("indented (4-space) code is NOT block start")
     func indentedCodeNotBlockStart() {
         #expect(!isBlockStart("    code"))
@@ -135,6 +142,12 @@ struct ContainersTests {
     @Test("thematic break interrupts")
     func thematicInterrupts() {
         #expect(canInterruptParagraph("- - -"))
+    }
+
+    @Test("underscore-led thematic break interrupts")
+    func underscoreThematicInterrupts() {
+        #expect(canInterruptParagraph("___"))
+        #expect(canInterruptParagraph("_ _ _"))
     }
 
     @Test("indented code (4-space) does not interrupt")
