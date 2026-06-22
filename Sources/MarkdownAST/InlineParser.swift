@@ -28,6 +28,22 @@ struct InlineParser {
                 i += 2
                 continue
             }
+            if c == "`" {
+                // Code span: an opening backtick run is closed by a run of equal
+                // length; content is verbatim (no escapes). An unmatched run is
+                // literal text.
+                var n = 0
+                while i + n < chars.count, chars[i + n] == "`" { n += 1 }
+                if let close = findClosingBacktickRun(chars, from: i + n, length: n) {
+                    flushText()
+                    result.append(.code(codeSpanContent(chars, from: i + n, to: close)))
+                    i = close + n
+                } else {
+                    buf.append(String(repeating: "`", count: n))
+                    i += n
+                }
+                continue
+            }
             if c == "[" {
                 if i + 1 < chars.count, chars[i + 1] == "^",
                    let (id, end) = scanFootnoteRef(chars, from: i), defs.hasFootnote(id) {
@@ -50,6 +66,31 @@ struct InlineParser {
         }
         flushText()
         return result
+    }
+
+    /// Finds the index of a closing backtick run of exactly `n` backticks at or
+    /// after `start` (runs of other lengths are skipped as content), or nil.
+    private func findClosingBacktickRun(_ chars: [Character], from start: Int, length n: Int) -> Int? {
+        var j = start
+        while j < chars.count {
+            guard chars[j] == "`" else { j += 1; continue }
+            var m = 0
+            while j + m < chars.count, chars[j + m] == "`" { m += 1 }
+            if m == n { return j }
+            j += m
+        }
+        return nil
+    }
+
+    /// Code-span content `chars[start..<end]`, stripping one leading and one
+    /// trailing space iff both edges are spaces and it is not all spaces (§6.3).
+    private func codeSpanContent(_ chars: [Character], from start: Int, to end: Int) -> String {
+        var content = String(chars[start..<end])
+        if content.count >= 2, content.first == " ", content.last == " ",
+           !content.allSatisfy({ $0 == " " }) {
+            content = String(content.dropFirst().dropLast())
+        }
+        return content
     }
 
     /// Scans a footnote reference `[^id]` at `chars[start]` (`[`), returning the
