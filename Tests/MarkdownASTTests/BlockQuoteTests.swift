@@ -41,8 +41,8 @@ struct BlockQuoteTests {
         #expect(out == [
             .blockQuote(blocks: [.paragraph(raw: "para")]),
             .list(RawList(kind: .bullet, isTight: true, items: [
-                RawListItem(blocks: [.paragraph(raw: "item")], task: nil),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "item")], task: nil)
+            ]))
         ])
     }
 

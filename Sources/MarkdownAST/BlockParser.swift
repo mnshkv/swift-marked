@@ -359,8 +359,7 @@ struct BlockParser {
                 let (listBlock, next) = parseList(lines, from: i, firstMarker: firstMarker, depth: depth)
                 blocks.append(listBlock)
                 i = next - 1 // outer `i += 1` re-lands on the first unconsumed line
-            }
-            else {
+            } else {
                 pending.append(trimWhitespace(line))
             }
             i += 1

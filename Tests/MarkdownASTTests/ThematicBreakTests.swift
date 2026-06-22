@@ -67,8 +67,8 @@ struct ThematicBreakTests {
         let out = BlockParser(defs: DefinitionStore()).parse(["- a"], depth: 0)
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
-                RawListItem(blocks: [.paragraph(raw: "a")], task: nil),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "a")], task: nil)
+            ]))
         ])
     }
 

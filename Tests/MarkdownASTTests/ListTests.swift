@@ -9,7 +9,7 @@ struct ListTests {
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
                 RawListItem(blocks: [.paragraph(raw: "a")], task: nil),
-                RawListItem(blocks: [.paragraph(raw: "b")], task: nil),
+                RawListItem(blocks: [.paragraph(raw: "b")], task: nil)
             ]))
         ])
     }
@@ -20,7 +20,7 @@ struct ListTests {
         #expect(out == [
             .list(RawList(kind: .ordered(start: 3), isTight: true, items: [
                 RawListItem(blocks: [.paragraph(raw: "x")], task: nil),
-                RawListItem(blocks: [.paragraph(raw: "y")], task: nil),
+                RawListItem(blocks: [.paragraph(raw: "y")], task: nil)
             ]))
         ])
     }
@@ -33,10 +33,10 @@ struct ListTests {
                 RawListItem(blocks: [
                     .paragraph(raw: "a"),
                     .list(RawList(kind: .bullet, isTight: true, items: [
-                        RawListItem(blocks: [.paragraph(raw: "b")], task: nil),
-                    ])),
-                ], task: nil),
-            ])),
+                        RawListItem(blocks: [.paragraph(raw: "b")], task: nil)
+                    ]))
+                ], task: nil)
+            ]))
         ])
     }
 
@@ -45,9 +45,9 @@ struct ListTests {
         let out = BlockParser(defs: DefinitionStore()).parse(["- a", "# H"], depth: 0)
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
-                RawListItem(blocks: [.paragraph(raw: "a")], task: nil),
+                RawListItem(blocks: [.paragraph(raw: "a")], task: nil)
             ])),
-            .heading(level: 1, raw: "H"),
+            .heading(level: 1, raw: "H")
         ])
     }
 
@@ -56,8 +56,8 @@ struct ListTests {
         let out = BlockParser(defs: DefinitionStore()).parse(["- a", "lazy"], depth: 0)
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
-                RawListItem(blocks: [.paragraph(raw: "a\nlazy")], task: nil),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "a\nlazy")], task: nil)
+            ]))
         ])
     }
 
@@ -67,8 +67,8 @@ struct ListTests {
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: false, items: [
                 RawListItem(blocks: [.paragraph(raw: "a")], task: nil),
-                RawListItem(blocks: [.paragraph(raw: "b")], task: nil),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "b")], task: nil)
+            ]))
         ])
     }
 
@@ -78,8 +78,8 @@ struct ListTests {
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
                 RawListItem(blocks: [.paragraph(raw: "a")], task: nil),
-                RawListItem(blocks: [.paragraph(raw: "b")], task: nil),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "b")], task: nil)
+            ]))
         ])
     }
 
@@ -88,8 +88,8 @@ struct ListTests {
         let out = BlockParser(defs: DefinitionStore()).parse(["- a", "", "  b"], depth: 0)
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: false, items: [
-                RawListItem(blocks: [.paragraph(raw: "a"), .paragraph(raw: "b")], task: nil),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "a"), .paragraph(raw: "b")], task: nil)
+            ]))
         ])
     }
 
@@ -99,8 +99,8 @@ struct ListTests {
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
                 RawListItem(blocks: [.paragraph(raw: "a")], task: nil),
-                RawListItem(blocks: [.paragraph(raw: "b")], task: nil),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "b")], task: nil)
+            ]))
         ])
     }
 }

@@ -8,8 +8,8 @@ struct TaskListTests {
         let out = BlockParser(defs: DefinitionStore()).parse(["- [ ] todo"], depth: 0)
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
-                RawListItem(blocks: [.paragraph(raw: "todo")], task: .unchecked),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "todo")], task: .unchecked)
+            ]))
         ])
     }
 
@@ -18,8 +18,8 @@ struct TaskListTests {
         let out = BlockParser(defs: DefinitionStore()).parse(["- [x] done"], depth: 0)
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
-                RawListItem(blocks: [.paragraph(raw: "done")], task: .checked),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "done")], task: .checked)
+            ]))
         ])
     }
 
@@ -28,8 +28,8 @@ struct TaskListTests {
         let out = BlockParser(defs: DefinitionStore()).parse(["- [X] done"], depth: 0)
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
-                RawListItem(blocks: [.paragraph(raw: "done")], task: .checked),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "done")], task: .checked)
+            ]))
         ])
     }
 
@@ -38,8 +38,8 @@ struct TaskListTests {
         let out = BlockParser(defs: DefinitionStore()).parse(["- [x]  done"], depth: 0)
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
-                RawListItem(blocks: [.paragraph(raw: "done")], task: .checked),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "done")], task: .checked)
+            ]))
         ])
     }
 
@@ -48,8 +48,8 @@ struct TaskListTests {
         let out = BlockParser(defs: DefinitionStore()).parse(["- normal"], depth: 0)
         #expect(out == [
             .list(RawList(kind: .bullet, isTight: true, items: [
-                RawListItem(blocks: [.paragraph(raw: "normal")], task: nil),
-            ])),
+                RawListItem(blocks: [.paragraph(raw: "normal")], task: nil)
+            ]))
         ])
     }
 }
