@@ -33,6 +33,15 @@ struct BlockParser {
             let line = lines[i]
             if isBlank(line) {
                 flush()
+            } else if isThematicBreakLine(line) {
+                // A thematic break interrupts a paragraph (CommonMark §4.1).
+                // NOTE: `para\n---` is a setext underline, not a thematic break,
+                // but setext is T16 (not yet implemented). Until T16 lands, that
+                // case is mis-handled as `[.paragraph("para"), .thematicBreak]`;
+                // T16 will insert a setext check (only when a paragraph is
+                // pending) BEFORE this branch.
+                flush()
+                blocks.append(.thematicBreak)
             } else if let h = atxHeading(Substring(line)) {
                 // ATX headings interrupt a pending paragraph.
                 flush()
@@ -45,6 +54,18 @@ struct BlockParser {
         flush()
 
         return blocks
+    }
+
+    /// True iff `line` is a thematic break (CommonMark §4.1), honoring the
+    /// 4-space indented-code gate. `isThematicBreak` (in `Containers.swift`)
+    /// operates on an already-`stripUpTo3Spaces`'d line and does NOT reject a
+    /// leading-space prefix, so we gate here: when the original line has ≥4
+    /// leading spaces, `stripUpTo3Spaces` returns it unchanged and
+    /// `stripped.first == " "` ⇒ fall through (indented code, not a break).
+    private func isThematicBreakLine(_ line: String) -> Bool {
+        let stripped = stripUpTo3Spaces(Substring(line))
+        guard stripped.first != " " else { return false }
+        return isThematicBreak(stripped)
     }
 
     /// Attempts to recognize an ATX heading (CommonMark §4.2) in `line`.

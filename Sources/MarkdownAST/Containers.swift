@@ -137,7 +137,7 @@ private func isSetextUnderline(_ s: Substring, ch: Character) -> Bool {
     return s.contains(ch)
 }
 
-private func isThematicBreak(_ s: Substring) -> Bool {
+func isThematicBreak(_ s: Substring) -> Bool {
     // Thematic break: line containing only `-`, `*`, `_` and spaces, with at
     // least three of one of those markers.
     var dash = 0, star = 0, underscore = 0
