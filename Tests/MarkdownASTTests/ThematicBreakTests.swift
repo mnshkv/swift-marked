@@ -39,6 +39,40 @@ struct ThematicBreakTests {
         #expect(out == [.thematicBreak])
     }
 
+    @Test("`*  *  *` (multi-space) is a thematic break")
+    func hrMultiSpaceStars() {
+        // Closes the Task 9 nit: "no `*  *  *` multi-space test". A thematic
+        // break allows any number of spaces between the repeat chars
+        // (CommonMark §4.2). Verified via the FULL dispatcher so the Task 19
+        // ordering guard locks this behavior against the future Task 20 list
+        // branch — `*  *  *` must remain `.thematicBreak`, not a list.
+        let out = BlockParser(defs: DefinitionStore()).parse(["*  *  *"], depth: 0)
+        #expect(out == [.thematicBreak])
+    }
+
+    @Test("`- - - -` (four-dash run) is a thematic break")
+    func hrFourSpacedDashes() {
+        // A thematic break is ≥3 repeat chars separated by ≤3 spaces
+        // (CommonMark §4.2); 4 `-` chars is still a break. Verified via the
+        // full dispatcher as a Task 19 regression guard against the future
+        // list branch.
+        let out = BlockParser(defs: DefinitionStore()).parse(["- - - -"], depth: 0)
+        #expect(out == [.thematicBreak])
+    }
+
+    @Test("`- a` is currently a paragraph (CURRENT behavior — flips in T20)")
+    func dashACurrentlyParagraph() {
+        // Task 19 PREEMPTIVE-GUARD sentinel: there is NO list dispatch branch
+        // yet (Task 18 only added the `listMarker(_:)` recognizer; the dispatch
+        // branch is Task 20). So `- a` falls through to paragraph-accumulate.
+        // Task 20 will add the list branch and this line will become a list —
+        // at that point, UPDATE this test to assert the list shape. It exists
+        // here ONLY to document the current behavior and to make the
+        // pre-list-branch state explicit so T20's wiring is observable.
+        let out = BlockParser(defs: DefinitionStore()).parse(["- a"], depth: 0)
+        #expect(out == [.paragraph(raw: "- a")])
+    }
+
     @Test("`--` is a paragraph, not a thematic break")
     func twoDashesIsParagraph() {
         let out = BlockParser(defs: DefinitionStore()).parse(["--"], depth: 0)

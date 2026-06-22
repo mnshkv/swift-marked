@@ -323,7 +323,24 @@ struct BlockParser {
                 }
                 definitions.append(curDef)
                 blocks.append(.definitionList(definitions))
-            } else {
+            }
+            // K2 ordering point (Task 19 — dispatch ordering guard):
+            // Task 20 inserts the LIST dispatch branch HERE — as a new
+            // `else if` between the definition-list branch above and the
+            // paragraph-accumulate fallback below — AFTER the thematic-break
+            // branch (which runs near the top of this chain, at the
+            // `isThematicBreakLine(line)` check). This ordering is MANDATORY:
+            // thematic-break-shaped lines such as `- - -`, `* * *`, and `---`
+            // are ALSO syntactically valid bullet list markers per the Task 18
+            // `listMarker(_:)` recognizer (e.g. `- - -` is a `-` bullet followed
+            // by content `- -`, markerWidth 2). CommonMark §4.2 resolves the
+            // ambiguity by PRECEDENCE: the thematic-break construct is checked
+            // BEFORE the list construct, so `- - -` → `.thematicBreak`, NOT a
+            // 1-item list. If Task 20 places the list branch ABOVE the thematic
+            // branch, `- - -`/`* * *`/`---` would wrongly become lists and the
+            // Task 19 regression tests in `ThematicBreakTests.swift` would
+            // fail. Keep the list branch BELOW thematic (i.e. at this point).
+            else {
                 pending.append(trimWhitespace(line))
             }
             i += 1
