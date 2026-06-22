@@ -100,17 +100,38 @@ struct BlockParser {
                 }
                 let sub = BlockParser(defs: defs).parse(inner, depth: depth + 1)
                 blocks.append(.blockQuote(blocks: sub))
-            } else if pending.isEmpty
-                && i + 1 < lines.count
-                && delimiterAlignments(lines[i + 1]) != nil
-            {
+            } else if pending.isEmpty, i + 1 < lines.count {
                 // GFM table (§4.6). Tables cannot interrupt a paragraph (F7):
                 // only start one when the pending paragraph is empty. The
-                // header is `lines[i]`; the delimiter is `lines[i+1]` (already
-                // validated by `delimiterAlignments`); subsequent lines are
-                // data rows until a blank line or another block-start.
-                let headerCells = splitTableRow(line)
-                let alignments = delimiterAlignments(lines[i + 1])!
+                // header is `lines[i]`; the delimiter is `lines[i+1]`;
+                // subsequent lines are data rows until a blank line or another
+                // block-start.
+                //
+                // GFM tables allow 0–3 leading spaces of indentation (like
+                // other block constructs); 4+ leading spaces is indented-code
+                // territory and must NOT be a table. We strip up to 3 leading
+                // spaces from the header, delimiter, and each data-row line
+                // BEFORE passing them to `splitTableRow`/`delimiterAlignments`
+                // (single strip site — the helpers themselves stay
+                // indentation-agnostic). `stripUpTo3Spaces` returns a line
+                // with ≥4 leading spaces unchanged, so the 4-space case leaves
+                // leading spaces in place; the stripped header's first char is
+                // then a space (not `|`) and the stripped delimiter's first
+                // cell is empty/whitespace, failing `:?-+:?` → not a table →
+                // falls through to paragraph (correct).
+                let headerLine = stripUpTo3Spaces(Substring(line))
+                let delimiterLine = stripUpTo3Spaces(Substring(lines[i + 1]))
+                // ≥4 leading spaces on the header ⇒ indented-code/paragraph
+                // territory, not a table.
+                guard headerLine.first != " ",
+                      let alignments = delimiterAlignments(String(delimiterLine))
+                else {
+                    pending.append(trimWhitespace(line))
+                    i += 1
+                    continue
+                }
+
+                let headerCells = splitTableRow(String(headerLine))
                 let width = headerCells.count
 
                 // Guard: the delimiter cell count must equal the header cell
@@ -134,7 +155,8 @@ struct BlockParser {
                         i -= 1
                         break
                     }
-                    var cells = splitTableRow(cl)
+                    let rowLine = stripUpTo3Spaces(Substring(cl))
+                    var cells = splitTableRow(String(rowLine))
                     // Normalize cell count to header width: pad or truncate.
                     if cells.count < width {
                         cells.append(contentsOf: Array(repeating: "", count: width - cells.count))

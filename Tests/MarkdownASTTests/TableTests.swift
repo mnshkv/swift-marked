@@ -143,4 +143,52 @@ struct TableTests {
             ))
         ])
     }
+
+    @Test("2-space-indented table is recognised (0–3 leading spaces allowed)")
+    func indentedTable() {
+        let out = BlockParser(defs: DefinitionStore()).parse(
+            ["  | a | b |", "  | - | - |", "  | 1 | 2 |"],
+            depth: 0
+        )
+        #expect(out == [
+            .table(RawTable(
+                alignments: [.none, .none],
+                header: [["a", "b"]],
+                rows: [["1", "2"]]
+            ))
+        ])
+    }
+
+    @Test("3-space indent is the upper bound for table indentation")
+    func threeSpaceIndentTable() {
+        let out = BlockParser(defs: DefinitionStore()).parse(
+            ["   | a |", "   | - |", "   | 1 |"],
+            depth: 0
+        )
+        #expect(out == [
+            .table(RawTable(
+                alignments: [.none],
+                header: [["a"]],
+                rows: [["1"]]
+            ))
+        ])
+    }
+
+    @Test("4-space indent is NOT a table (indented-code/paragraph territory)")
+    func fourSpaceIndentNotTable() {
+        let out = BlockParser(defs: DefinitionStore()).parse(
+            ["    | a |", "    | - |", "    | 1 |"],
+            depth: 0
+        )
+        #expect(out == [.paragraph(raw: "| a |\n| - |\n| 1 |")])
+    }
+
+    @Test("header/delimiter cell-count mismatch falls through to a paragraph")
+    func countMismatchIsParagraph() {
+        let out = BlockParser(defs: DefinitionStore()).parse(
+            ["| a | b | c |", "| - | - |", "| 1 | 2 | 3 |"],
+            depth: 0
+        )
+        #expect(out == [.paragraph(raw: "| a | b | c |\n| - | - |\n| 1 | 2 | 3 |")])
+    }
 }
