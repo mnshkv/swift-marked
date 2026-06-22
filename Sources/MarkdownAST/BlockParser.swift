@@ -22,6 +22,8 @@ struct BlockParser {
         var blocks: [RawBlock] = []
         var pending: [String] = []
 
+        // Emits any accumulated paragraph lines as a single paragraph block and
+        // clears the buffer.
         func flush() {
             guard !pending.isEmpty else { return }
             blocks.append(.paragraph(raw: pending.joined(separator: "\n")))

@@ -11,23 +11,28 @@ public indirect enum MarkdownBlock: Equatable, Sendable, Hashable {
 public struct MarkdownList: Equatable, Sendable, Hashable {
     public enum Kind: Equatable, Sendable, Hashable { case bullet; case ordered(start: Int) }
     public var kind: Kind; public var isTight: Bool; public var items: [MarkdownListItem]
+    /// Creates a list of the given kind and tightness from its items.
     public init(kind: Kind, isTight: Bool, items: [MarkdownListItem]) { self.kind = kind; self.isTight = isTight; self.items = items }
 }
 public struct MarkdownListItem: Equatable, Sendable, Hashable {
     public var blocks: [MarkdownBlock]; public var task: TaskState?
+    /// Creates a list item from its block content and optional task-checkbox state.
     public init(blocks: [MarkdownBlock], task: TaskState? = nil) { self.blocks = blocks; self.task = task }
 }
 public enum TaskState: Equatable, Sendable, Hashable { case checked, unchecked }
 public struct MarkdownTable: Equatable, Sendable, Hashable {
     public enum Alignment: Equatable, Sendable, Hashable { case none, left, center, right }
     public var alignments: [Alignment]; public var header: [[MarkdownInline]]; public var rows: [[[MarkdownInline]]]
+    /// Creates a table from its per-column alignments, header cells, and data rows.
     public init(alignments: [Alignment], header: [[MarkdownInline]], rows: [[[MarkdownInline]]]) { self.alignments = alignments; self.header = header; self.rows = rows }
 }
 public struct MarkdownDefinition: Equatable, Sendable, Hashable {
     public var term: [MarkdownInline]; public var details: [[MarkdownBlock]]
+    /// Creates a definition-list entry from its term and one or more detail blocks.
     public init(term: [MarkdownInline], details: [[MarkdownBlock]]) { self.term = term; self.details = details }
 }
 public struct FootnoteDefinition: Equatable, Sendable, Hashable {
     public var id: String; public var blocks: [MarkdownBlock]
+    /// Creates a footnote definition from its id and resolved block content.
     public init(id: String, blocks: [MarkdownBlock]) { self.id = id; self.blocks = blocks }
 }

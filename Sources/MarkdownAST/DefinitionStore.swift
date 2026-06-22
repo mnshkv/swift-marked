@@ -4,6 +4,7 @@
 public struct LinkDef: Equatable, Sendable {
     public let destination: String
     public let title: String?
+    /// Creates a link definition from its destination URL and optional title.
     public init(destination: String, title: String?) {
         self.destination = destination
         self.title = title
@@ -31,6 +32,7 @@ final class DefinitionStore {
     /// Footnote definitions in insertion order, raw bodies pending Pass B resolution.
     private(set) var pendingFootnotes: [PendingFootnote] = []
 
+    /// Creates an empty store with no link or footnote definitions.
     init() {}
 
     /// Normalize a CommonMark link label: trim, lowercase, collapse internal

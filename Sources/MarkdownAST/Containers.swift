@@ -117,9 +117,9 @@ func canInterruptParagraph(_ line: Substring) -> Bool {
 
 // MARK: - Single-construct classifiers (private)
 
+/// True if `s` begins a code fence: a run of at least three identical `open`
+/// characters (any trailing info string is irrelevant here).
 private func isFence(_ s: Substring, open: Character) -> Bool {
-    // A fence is a run of ≥3 identical `open` chars, optionally followed by
-    // an info string. Here we only need to know it begins with ≥3.
     var count = 0
     for ch in s {
         if ch == open { count += 1 } else { break }
@@ -127,9 +127,9 @@ private func isFence(_ s: Substring, open: Character) -> Bool {
     return count >= 3
 }
 
+/// True if `s` is a setext underline: only the char `ch` (`=` or `-`) and
+/// spaces, with at least one `ch`.
 private func isSetextUnderline(_ s: Substring, ch: Character) -> Bool {
-    // A setext underline is a line of `=` or `-` (possibly with trailing
-    // whitespace). It must contain only that char (and spaces).
     for c in s {
         if c != ch && c != " " { return false }
     }
@@ -137,9 +137,9 @@ private func isSetextUnderline(_ s: Substring, ch: Character) -> Bool {
     return s.contains(ch)
 }
 
+/// True if `s` is a thematic break: only `-`, `*`, `_` and spaces, with at
+/// least three of a single marker char.
 func isThematicBreak(_ s: Substring) -> Bool {
-    // Thematic break: line containing only `-`, `*`, `_` and spaces, with at
-    // least three of one of those markers.
     var dash = 0, star = 0, underscore = 0
     for c in s {
         switch c {
@@ -160,9 +160,9 @@ func isThematicBreak(_ s: Substring) -> Bool {
 // and "is the ordered start number exactly 1?" — enough for isBlockStart /
 // canInterruptParagraph. Do NOT reuse for actual list parsing.
 
+/// True if `s` starts with any valid unordered or ordered list marker
+/// (regardless of start number); used by `isBlockStart` for interruption checks.
 private func isListMarkerPeek(_ s: Substring) -> Bool {
-    // True for any valid unordered or ordered marker (regardless of number),
-    // followed by a space or end-of-line. Used by isBlockStart.
     guard let first = s.first else { return false }
     if first == "-" || first == "*" || first == "+" {
         return isUnorderedListNonEmptyItem(s) || isUnorderedListEmptyItem(s)
@@ -173,6 +173,8 @@ private func isListMarkerPeek(_ s: Substring) -> Bool {
     return false
 }
 
+/// True if `s` is an unordered marker (`-`/`*`/`+`) followed by a space/tab and
+/// at least one non-whitespace content character.
 private func isUnorderedListNonEmptyItem(_ s: Substring) -> Bool {
     guard let first = s.first else { return false }
     guard first == "-" || first == "*" || first == "+" else { return false }
@@ -190,10 +192,12 @@ private func isUnorderedListNonEmptyItem(_ s: Substring) -> Bool {
     return !rest.isEmpty
 }
 
+/// True if `s` is an unordered marker (`-`/`*`/`+`) alone or followed only by
+/// whitespace (an empty list item).
 private func isUnorderedListEmptyItem(_ s: Substring) -> Bool {
     guard let first = s.first else { return false }
     guard first == "-" || first == "*" || first == "+" else { return false }
-    var i = s.index(after: s.startIndex)
+    let i = s.index(after: s.startIndex)
     if i == s.endIndex { return true }
     let after = s[i]
     guard after == " " || after == "\t" else { return false }
@@ -201,8 +205,9 @@ private func isUnorderedListEmptyItem(_ s: Substring) -> Bool {
     return rest.isEmpty
 }
 
+/// True if `s` is an ordered list marker: one or more ASCII digits, then `.`
+/// or `)`, then a space or end-of-line (any start number).
 private func isOrderedMarkerAny(_ s: Substring) -> Bool {
-    // One or more ASCII digits, then `.` or `)`, then space or end-of-line.
     var i = s.startIndex
     var digits = 0
     while i < s.endIndex && s[i].isNumber && s[i].isASCII {
@@ -218,9 +223,10 @@ private func isOrderedMarkerAny(_ s: Substring) -> Bool {
     return after == " " || after == "\t"
 }
 
+/// True if `s` is an ordered marker whose start number is exactly `1`, followed
+/// by a space and non-whitespace content — the only ordered list that may
+/// interrupt a paragraph.
 private func isOrderedListStartOneNonEmpty(_ s: Substring) -> Bool {
-    // Digit run must be exactly "1", then `.` or `)`, then space, then
-    // non-whitespace content.
     var i = s.startIndex
     var digits = ""
     while i < s.endIndex && s[i].isNumber && s[i].isASCII {
