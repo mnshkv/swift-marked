@@ -11,7 +11,7 @@ struct SmokeTests {
     @Test("parse never returns nil-equivalent — always a document")
     func parseAnyReturnsDocument() {
         let doc = MarkdownParser.parse("# Some heading\n\nParagraph.")
-        #expect(doc.blocks == [])
+        #expect(doc.blocks.count == 2)
         #expect(doc.footnotes == [])
     }
 }
