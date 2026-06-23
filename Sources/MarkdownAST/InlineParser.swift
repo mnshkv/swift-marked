@@ -49,6 +49,12 @@ struct InlineParser {
                 }
                 continue
             }
+            if c == "<", let (node, end) = parseAutolink(chars, from: i) {
+                flushText()
+                tokens.append(.literal(node))
+                i = end
+                continue
+            }
             if c == "!" || c == "[" {
                 // Inline link/image has precedence over emphasis: it is fully
                 // resolved here and emitted as one literal token.
