@@ -1,7 +1,7 @@
 # swift-marked
 
 A hand-written SwiftUI Markdown library, built in pure Swift with **no
-third-party dependencies**. It ships as two layers you can use independently:
+third-party dependencies**. It ships as three layers you can use independently:
 
 - **`MarkdownAST`** — a zero-dependency parser that turns Markdown (CommonMark
   0.31 + GFM + extensions) into a value-type AST. No `swift-markdown`, no
@@ -10,22 +10,27 @@ third-party dependencies**. It ships as two layers you can use independently:
   draws, and selects a generic rich-text document, hosted in SwiftUI via a
   `MarkdownTextView`. Apple frameworks only (CoreText / Core Graphics / SwiftUI
   / UIKit·AppKit).
+- **`Marked`** — the umbrella renderer module. It `@_exported`-re-exports both
+  the parser and the engine, maps a `MarkdownDocument` AST to a `TextDocument`,
+  and wraps everything in a single `MarkdownView` SwiftUI view. A single
+  `import Marked` is all you need.
 
 Built test-first (TDD): every feature is driven by a failing test, and the suite
-currently has **475 tests** across the two modules (0 lint errors).
+currently has **523 tests** across all three modules (0 lint errors).
 
 ## Installation
 
-Swift Package Manager — both products are available:
+Swift Package Manager — all three products are available:
 
 ```swift
 .package(url: "https://github.com/mnshkv/swift-marked.git", branch: "main")
-// .product(name: "MarkdownAST", package: "swift-marked")          // parser
-// .product(name: "MarkdownTextEngine", package: "swift-marked")   // text engine
+// .product(name: "Marked", package: "swift-marked")               // umbrella renderer (recommended)
+// .product(name: "MarkdownAST", package: "swift-marked")          // parser only
+// .product(name: "MarkdownTextEngine", package: "swift-marked")   // text engine only
 ```
 
 Requires Swift 6.2+. `MarkdownAST` is platform-agnostic (builds on Linux);
-`MarkdownTextEngine` targets iOS 26+ and macOS.
+`MarkdownTextEngine` and `Marked` target iOS 26+ and macOS.
 
 ## Usage
 
@@ -46,11 +51,28 @@ let doc = MarkdownParser.parse("# Hello\n\nWorld with **bold** and `code`.")
 `footnotes: [FootnoteDefinition]`). The AST types are plain `enum`/`struct`
 values (`Equatable`, `Sendable`, `Hashable`).
 
+### Render Markdown in SwiftUI (recommended)
+
+One import, one view — `Marked` re-exports the parser and engine:
+
+```swift
+import Marked
+
+struct ContentView: View {
+    var body: some View {
+        MarkdownView("# Hello\n\nWorld with **bold** and a [link](https://swift.org).")
+    }
+}
+```
+
+Links are opened via the SwiftUI environment's `openURL` action by default, or
+you can supply an `onLink: (URL) -> Void` closure. Images are loaded
+asynchronously via an `ImageProvider` you provide. Styling is controlled by
+`MarkdownStyle` (font sizes, spacing, colours).
+
 ### Display it (text engine)
 
-The engine is Markdown-agnostic: it renders a generic `TextDocument`. A future
-renderer (Spec 3, below) will map `MarkdownAST` → `TextDocument` for you; until
-then you build the `TextDocument` yourself.
+The engine is Markdown-agnostic: it renders a generic `TextDocument`.
 
 ```swift
 import MarkdownTextEngine
@@ -122,14 +144,13 @@ The library is three specs, built in dependency order:
 
 1. **Parser → AST** (`MarkdownAST`) — ✅ done.
 2. **Text engine** (`MarkdownTextEngine`) — ✅ done.
-3. **Markdown renderer** — *next*: binds `MarkdownAST` + the engine (maps the AST
-   to a `TextDocument`, wires `openURL` and image loading, a single style config).
+3. **Markdown renderer** (`Marked`) — ✅ done.
 
 ## Development
 
 ```sh
 swift build      # build
-swift test       # run the test suite (475 tests)
+swift test       # run the test suite (523 tests)
 swiftlint        # lint (config in .swiftlint.yml)
 ```
 

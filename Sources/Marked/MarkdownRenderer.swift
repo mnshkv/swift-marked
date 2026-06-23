@@ -59,6 +59,22 @@ public extension MarkdownRenderer {
     }
 
     /// Parses `markdown` and renders it using the given style and color scheme.
+    ///
+    /// This is the convenience entry point used by `MarkdownView`. It calls
+    /// `MarkdownParser.parse` then delegates to the `MarkdownDocument` overload.
+    ///
+    /// ## v1 Known Limitations (Spec §7)
+    ///
+    /// - **Footnote refs** — `[^ref]` tokens resolve to `.footnote(id)` via
+    ///   `resolveLink`, but `MarkdownView` does **not** scroll to the footnote
+    ///   body; scrolling to anchors is deferred.
+    /// - **Engine-default colours** — quote bar, code-box tint, and list-marker
+    ///   colour come from `MarkdownTextEngine` built-ins; `MarkdownStyle` does
+    ///   not control them.
+    /// - **System fonts only** — custom font families are not supported; weight,
+    ///   size, and monospaced traits are used to select system fonts.
+    /// - **`softBreak` → space** — soft line breaks in the Markdown source are
+    ///   emitted as a single space run in the `TextDocument`.
     static func render(
         _ markdown: String,
         style: MarkdownStyle = .default,

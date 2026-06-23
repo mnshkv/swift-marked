@@ -15,6 +15,20 @@ import SwiftUI
 ///
 /// Link taps are dispatched through `onLink`. If `onLink` is not provided,
 /// `https:` / `http:` links are opened with the environment's `openURL` action.
+///
+/// ## v1 Known Limitations (Spec §7)
+///
+/// - **Footnote refs** — clicking a `[^ref]` fires `resolveLink` (`.footnote`)
+///   but the view does **not** scroll to the footnote body at the bottom of the
+///   document; scrolling is deferred to a future release.
+/// - **Engine-default colours** — the quote bar, code-box background tint, and
+///   list-marker colour are drawn by `MarkdownTextEngine` using its own
+///   hard-coded defaults; they are **not** controlled by `MarkdownStyle` and
+///   cannot be overridden via the `style` parameter.
+/// - **System fonts only** — all text is typeset with system fonts selected by
+///   weight/size/monospaced trait; custom font families are not supported.
+/// - **`softBreak` → space** — a soft line break in the source (`\n` inside a
+///   paragraph) is rendered as a single space, not as a visible line break.
 @available(iOS 26, macOS 14, *)
 @MainActor
 public struct MarkdownView: View {
