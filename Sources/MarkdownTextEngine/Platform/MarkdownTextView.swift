@@ -284,6 +284,7 @@ private struct PreviewImageProvider: ImageProvider {
 #Preview("MarkdownTextView") {
     ScrollView {
         MarkdownTextView(.preview,
+                         isSelectable: false,
                          onLink: { print("tapped link:", $0.token) },
                          images: PreviewImageProvider())
             .frame(maxWidth: 420)
