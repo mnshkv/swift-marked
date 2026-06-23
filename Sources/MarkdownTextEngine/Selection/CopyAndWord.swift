@@ -1,0 +1,63 @@
+import Foundation
+
+// MARK: - Copy text
+
+/// Returns the plain-text substring of `doc` covered by `range`.
+///
+/// Indices are UTF-16 offsets into `flattenedText(doc)`. Out-of-bounds indices are clamped.
+/// An empty range returns `""`.
+public func copyText(for range: TextRange, doc: TextDocument) -> String {
+    let flat = flattenedText(doc)
+    let utf16 = flat.utf16
+    let total = utf16.count
+
+    let start = max(0, min(range.start.index, total))
+    let end = max(0, min(range.end.index, total))
+    guard start < end else { return "" }
+
+    let startIdx = utf16.index(utf16.startIndex, offsetBy: start)
+    let endIdx = utf16.index(utf16.startIndex, offsetBy: end)
+    return String(utf16[startIdx..<endIdx])!
+}
+
+// MARK: - Word range
+
+/// Returns a `TextRange` covering the word that contains `position`.
+///
+/// Uses `String.enumerateSubstrings(options: .byWords)` to locate the word.
+/// If no word is found at the position (e.g. the position is on whitespace or out of bounds),
+/// returns a zero-length range at the (clamped) position.
+public func wordRange(at position: TextPosition, doc: TextDocument) -> TextRange {
+    let flat = flattenedText(doc)
+    let utf16 = flat.utf16
+    let total = utf16.count
+
+    // Clamp index
+    let clampedIndex = max(0, min(position.index, total))
+    let zeroLength = TextRange(start: TextPosition(index: clampedIndex), end: TextPosition(index: clampedIndex))
+
+    guard clampedIndex < total else { return zeroLength }
+
+    // Convert UTF-16 offset to String.Index
+    let targetUTF16Idx = utf16.index(utf16.startIndex, offsetBy: clampedIndex)
+    // Convert to Character-level index for enumerateSubstrings
+    let targetIdx = targetUTF16Idx.samePosition(in: flat) ?? flat.unicodeScalars.index(flat.unicodeScalars.startIndex, offsetBy: 0).samePosition(in: flat)!
+
+    var result: TextRange? = nil
+    flat.enumerateSubstrings(in: flat.startIndex..., options: .byWords) { _, substringRange, _, stop in
+        // Check if targetIdx falls within this word's range
+        if substringRange.lowerBound <= targetIdx && targetIdx < substringRange.upperBound {
+            // Convert substring bounds to UTF-16 offsets
+            let wordStart = flat.utf16.distance(from: flat.utf16.startIndex,
+                                                 to: substringRange.lowerBound.samePosition(in: flat.utf16)
+                                                    ?? flat.utf16.startIndex)
+            let wordEnd = flat.utf16.distance(from: flat.utf16.startIndex,
+                                               to: substringRange.upperBound.samePosition(in: flat.utf16)
+                                                  ?? flat.utf16.startIndex)
+            result = TextRange(start: TextPosition(index: wordStart), end: TextPosition(index: wordEnd))
+            stop = true
+        }
+    }
+
+    return result ?? zeroLength
+}
