@@ -121,8 +121,6 @@ public struct MarkdownTextView: View {
             images: images,
             editMenu: editMenu
         )
-        // intrinsicContentSize from TextEngineView drives this view's natural height.
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
