@@ -25,6 +25,17 @@ public enum DocumentRenderer {
 
     // MARK: - Public API
 
+    // MARK: - Image placeholder drawing constants
+
+    /// Fill color for the image placeholder box (light grey, RGB 0.90).
+    private static let placeholderFill: CGFloat = 0.90
+    /// Border color for the image placeholder box (medium grey, RGB 0.70).
+    private static let placeholderBorder: CGFloat = 0.70
+    /// Border thickness of the image placeholder box, in points.
+    private static let placeholderBorderWidth: CGFloat = 1.0
+
+    // MARK: - Public API
+
     /// Draws `layout` into `ctx`.
     ///
     /// - Parameters:
@@ -41,12 +52,18 @@ public enum DocumentRenderer {
     ///                   blocks that do not intersect this rectangle are skipped.
     ///   - selection:    An array of rects (document coordinates) to fill with
     ///                   the selection highlight color, drawn *behind* text.
+    ///   - images:       A resolved-image cache keyed by `ImageAttachment.source`.
+    ///                   Images present in this dict are drawn into the reserved rect.
+    ///                   Missing images produce a light-grey placeholder box instead.
+    ///                   This parameter is pure (no networking, no async) — callers
+    ///                   that do async loading pass the already-fetched `CGImage` here.
     public static func draw(
         _ layout: DocumentLayout,
         in ctx: CGContext,
         canvasHeight: CGFloat,
         visible: CGRect,
-        selection: [CGRect]
+        selection: [CGRect],
+        images: [String: CGImage] = [:]
     ) {
         guard !layout.blocks.isEmpty || !selection.isEmpty else { return }
 
@@ -84,7 +101,7 @@ public enum DocumentRenderer {
         // ------------------------------------------------------------------
         // 2. Draw blocks (text, list markers, quote bars, and nested layouts)
         // ------------------------------------------------------------------
-        drawBlocks(layout.blocks, in: ctx, visible: visible)
+        drawBlocks(layout.blocks, in: ctx, visible: visible, images: images)
 
         ctx.restoreGState()
     }
@@ -92,7 +109,12 @@ public enum DocumentRenderer {
     // MARK: - Private drawing helpers
 
     /// Draws all blocks in `blocks`, handling text, lists, and quotes recursively.
-    private static func drawBlocks(_ blocks: [BlockFrame], in ctx: CGContext, visible: CGRect) {
+    private static func drawBlocks(
+        _ blocks: [BlockFrame],
+        in ctx: CGContext,
+        visible: CGRect,
+        images: [String: CGImage]
+    ) {
         for block in blocks {
             switch block {
             case .text(let blockRect, let lines):
@@ -109,7 +131,7 @@ public enum DocumentRenderer {
                 }
                 // Recurse into each item's layout
                 for itemLayout in itemLayouts {
-                    drawBlocks(itemLayout.blocks, in: ctx, visible: visible)
+                    drawBlocks(itemLayout.blocks, in: ctx, visible: visible, images: images)
                 }
 
             case .quote(let quoteRect, let innerLayout, let barRect):
@@ -120,7 +142,7 @@ public enum DocumentRenderer {
                     ctx.fill(barRect)
                 }
                 // Recurse into inner layout
-                drawBlocks(innerLayout.blocks, in: ctx, visible: visible)
+                drawBlocks(innerLayout.blocks, in: ctx, visible: visible, images: images)
 
             case .rule(let rect):
                 guard rect.intersects(visible) else { continue }
@@ -136,10 +158,40 @@ public enum DocumentRenderer {
                 guard codeRect.intersects(visible) else { continue }
                 drawCodeBlock(box: box, lines: lines, languageLabel: langLabel, in: ctx, visible: visible)
 
-            case .image:
-                break
+            case .image(let rect, let attachment):
+                guard rect.intersects(visible) else { continue }
+                if let cgImage = images[attachment.source] {
+                    drawImage(cgImage, in: rect, ctx: ctx)
+                } else {
+                    drawImagePlaceholder(in: rect, ctx: ctx)
+                }
             }
         }
+    }
+
+    // MARK: - Image drawing
+
+    /// Draws a `CGImage` into the document-space `rect`.
+    ///
+    /// CoreGraphics draws images in CG space (y-up). Because `draw()` applies a y-flip
+    /// transform to the context before this is called, we simply draw into `rect` directly —
+    /// the flip is already accounted for.
+    private static func drawImage(_ image: CGImage, in rect: CGRect, ctx: CGContext) {
+        ctx.draw(image, in: rect)
+    }
+
+    /// Draws a placeholder box (light-grey fill + thin border) at `rect` in document space.
+    private static func drawImagePlaceholder(in rect: CGRect, ctx: CGContext) {
+        // Fill
+        ctx.setFillColor(red: placeholderFill, green: placeholderFill, blue: placeholderFill, alpha: 1.0)
+        ctx.fill(rect)
+        // Border (drawn as four thin rectangles to avoid strokeRect complications with transforms)
+        ctx.setFillColor(red: placeholderBorder, green: placeholderBorder, blue: placeholderBorder, alpha: 1.0)
+        let t = placeholderBorderWidth
+        ctx.fill(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: t))         // top
+        ctx.fill(CGRect(x: rect.minX, y: rect.maxY - t, width: rect.width, height: t))     // bottom
+        ctx.fill(CGRect(x: rect.minX, y: rect.minY, width: t, height: rect.height))        // left
+        ctx.fill(CGRect(x: rect.maxX - t, y: rect.minY, width: t, height: rect.height))    // right
     }
 
     /// Draws CoreText lines from a `.text` block.

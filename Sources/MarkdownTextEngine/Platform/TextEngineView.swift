@@ -123,7 +123,8 @@ public final class TextEngineView: UIView {
 
     public override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        DocumentRenderer.draw(docLayout, in: ctx, canvasHeight: bounds.height, visible: rect, selection: currentSelectionRects)
+        DocumentRenderer.draw(docLayout, in: ctx, canvasHeight: bounds.height, visible: rect,
+                              selection: currentSelectionRects)
     }
 }
 
@@ -138,6 +139,9 @@ import CoreGraphics
 /// - Draws windowed: only the portion covered by the dirty rect is rendered.
 /// - Supports basic drag selection via mouse events (Task 3.4).
 ///   Native selection handles / edit-menu come in Wave 7.
+/// - Loads images asynchronously via `imageProvider` (Task 6.3): after layout,
+///   one `Task` per image source fetches the `CGImage`; on completion, the image
+///   is stored in `imageCache` and only the image's reserved rect is invalidated.
 @MainActor
 public final class TextEngineView: NSView {
 
@@ -146,6 +150,12 @@ public final class TextEngineView: NSView {
     /// The document to display.
     public var document: TextDocument = TextDocument(blocks: []) {
         didSet { needsLayout = true }
+    }
+
+    /// Optional image provider for async image loading (Task 6.3).
+    /// When set, `TextEngineView` requests each image source after layout completes.
+    public var imageProvider: (any ImageProvider)? = nil {
+        didSet { imageCache = [:]; needsLayout = true }
     }
 
     /// The currently highlighted selection rects (document coordinates).
@@ -166,6 +176,13 @@ public final class TextEngineView: NSView {
 
     /// The anchor position when a drag begins (mouse-down point).
     private var dragAnchor: TextPosition? = nil
+
+    /// Cache of resolved CGImages keyed by source string.
+    /// Populated asynchronously by `loadImages()` after each layout.
+    private var imageCache: [String: CGImage] = [:]
+
+    /// Set of image sources currently being loaded (to avoid duplicate requests).
+    private var loadingImages: Set<String> = []
 
     // MARK: - Initialisation
 
@@ -229,10 +246,42 @@ public final class TextEngineView: NSView {
         docLayout = LayoutEngine.layout(document, width: w)
         invalidateIntrinsicContentSize()
         needsDisplay = true
+        // After (re)layout, kick off async image loading for any sources in the new layout.
+        if #available(macOS 10.15, *) { loadImages() }
     }
 
     public override var intrinsicContentSize: NSSize {
         docLayout.contentSize
+    }
+
+    // MARK: - Async image loading (Task 6.3)
+
+    /// Iterates all `.image` blocks in the current layout and fires async Tasks
+    /// to fetch each uncached source via `imageProvider`.
+    ///
+    /// On completion, the CGImage is stored in `imageCache` and only the image's
+    /// reserved rect is invalidated for a partial redraw.
+    @available(macOS 10.15, *)
+    private func loadImages() {
+        guard let provider = imageProvider else { return }
+        for block in docLayout.blocks {
+            guard case .image(let rect, let attachment) = block else { continue }
+            let source = attachment.source
+            guard imageCache[source] == nil, !loadingImages.contains(source) else { continue }
+            loadingImages.insert(source)
+            Task { [weak self] in
+                guard let self else { return }
+                let cgImage = await provider.image(for: source)
+                // Back on MainActor (Task inherits actor from @MainActor type).
+                self.loadingImages.remove(source)
+                if let cgImage {
+                    self.imageCache[source] = cgImage
+                    // Partial redraw: invalidate only the image's rect.
+                    self.setNeedsDisplay(rect)
+                }
+                // If nil: leave placeholder (do not mark as loading again).
+            }
+        }
     }
 
     // MARK: - Drawing
@@ -246,7 +295,14 @@ public final class TextEngineView: NSView {
         // blocks correctly.
         let visibleRect = CGRect(origin: dirtyRect.origin,
                                  size: CGSize(width: dirtyRect.width, height: dirtyRect.height))
-        DocumentRenderer.draw(docLayout, in: ctx, canvasHeight: bounds.height, visible: visibleRect, selection: currentSelectionRects)
+        DocumentRenderer.draw(
+            docLayout,
+            in: ctx,
+            canvasHeight: bounds.height,
+            visible: visibleRect,
+            selection: currentSelectionRects,
+            images: imageCache
+        )
     }
 }
 #endif
