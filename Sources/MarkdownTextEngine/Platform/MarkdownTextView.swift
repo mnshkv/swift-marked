@@ -261,32 +261,32 @@ private struct _TextEngineRepresentable: NSViewRepresentable {
 // in Selection/LinkHitTesting.swift. The private link-walking helpers that previously
 // lived here (linkPayload, linkPayloadInRuns, inlineRunText) have been removed to
 // eliminate the duplicate implementation.
-
-/// A synthetic image provider for previews: returns a solid teal image with a
-/// gold stripe for any source, so block & inline images render visibly instead
-/// of showing the unresolved-image placeholder box.
 private struct PreviewImageProvider: ImageProvider {
     func image(for source: String) async -> CGImage? {
-        let w = 320, h = 140
+        let w = 320, h = 213
         guard let ctx = CGContext(
             data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
-        ctx.setFillColor(CGColor(red: 0.20, green: 0.55, blue: 0.70, alpha: 1))
-        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
-        ctx.setFillColor(CGColor(red: 0.96, green: 0.78, blue: 0.25, alpha: 1))
-        ctx.fill(CGRect(x: 0, y: h / 2 - 10, width: w, height: 20))
+        // The renderer draws images upright, so high CG-y is the top band.
+        let band = CGFloat(h) / 3
+        ctx.setFillColor(CGColor(red: 0.835, green: 0.169, blue: 0.118, alpha: 1)) // red (bottom)
+        ctx.fill(CGRect(x: 0, y: 0, width: CGFloat(w), height: band))
+        ctx.setFillColor(CGColor(red: 0.0, green: 0.224, blue: 0.651, alpha: 1))   // blue (middle)
+        ctx.fill(CGRect(x: 0, y: band, width: CGFloat(w), height: band))
+        ctx.setFillColor(CGColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1))       // white (top)
+        ctx.fill(CGRect(x: 0, y: band * 2, width: CGFloat(w), height: CGFloat(h) - band * 2))
         return ctx.makeImage()
     }
 }
 
 #Preview("MarkdownTextView") {
-//    ScrollView {
+    ScrollView {
         MarkdownTextView(.preview,
                          onLink: { print("tapped link:", $0.token) },
                          images: PreviewImageProvider())
             .frame(maxWidth: 420)
             .padding()
-//    }
+    }
 }

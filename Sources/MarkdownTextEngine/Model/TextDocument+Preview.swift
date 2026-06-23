@@ -138,7 +138,7 @@ public extension TextDocument {
         // Block image
         blocks.append(label("Block image"))
         blocks.append(.image(ImageAttachment(source: "block",
-                                             intrinsicSize: CGSize(width: 320, height: 140),
+                                             intrinsicSize: CGSize(width: 300, height: 200),
                                              alt: "A sample block image")))
 
         // Thematic break
