@@ -27,9 +27,11 @@ public final class TextEngineView: UIView {
         didSet { setNeedsDisplay() }
     }
 
-    // MARK: - Private state
+    // MARK: - Internal state (accessible within the module for representable coordination)
 
-    private var docLayout: DocumentLayout = DocumentLayout(blocks: [], contentSize: .zero)
+    /// The most recently computed layout. Exposed internally so the SwiftUI
+    /// representable coordinator can hit-test tapped points against line frames.
+    var docLayout: DocumentLayout = DocumentLayout(blocks: [], contentSize: .zero)
     private var lastLayoutWidth: CGFloat = 0
 
     // MARK: - Layout
@@ -82,9 +84,11 @@ public final class TextEngineView: NSView {
         didSet { needsDisplay = true }
     }
 
-    // MARK: - Private state
+    // MARK: - Internal state (accessible within the module for representable coordination)
 
-    private var docLayout: DocumentLayout = DocumentLayout(blocks: [], contentSize: .zero)
+    /// The most recently computed layout. Exposed internally so the SwiftUI
+    /// representable coordinator can hit-test tapped points against line frames.
+    var docLayout: DocumentLayout = DocumentLayout(blocks: [], contentSize: .zero)
     private var lastLayoutWidth: CGFloat = 0
 
     // MARK: - Initialisation
