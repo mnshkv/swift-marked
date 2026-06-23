@@ -49,6 +49,16 @@ struct InlineParser {
                 }
                 continue
             }
+            if c == "!" || c == "[" {
+                // Inline link/image has precedence over emphasis: it is fully
+                // resolved here and emitted as one literal token.
+                if let (node, end) = parseInlineLinkOrImage(chars, from: i) {
+                    flushText()
+                    tokens.append(.literal(node))
+                    i = end
+                    continue
+                }
+            }
             if c == "[" {
                 if i + 1 < chars.count, chars[i + 1] == "^",
                    let (id, end) = scanFootnoteRef(chars, from: i), defs.hasFootnote(id) {
@@ -88,6 +98,50 @@ struct InlineParser {
         }
         flushText()
         return tokens
+    }
+
+    /// Parses an inline link `[text](dest "title")` or image `![alt](src "title")`
+    /// at `chars[start]`, returning the resolved node and the index just past the
+    /// closing `)`, or nil if it is not a well-formed inline link/image.
+    func parseInlineLinkOrImage(_ chars: [Character], from start: Int) -> (MarkdownInline, Int)? {
+        var i = start
+        let isImage = chars[i] == "!"
+        if isImage {
+            guard i + 1 < chars.count, chars[i + 1] == "[" else { return nil }
+            i += 1
+        }
+        guard i < chars.count, chars[i] == "[" else { return nil }
+        let textOpen = i
+        guard let textClose = matchBracket(chars, openAt: textOpen) else { return nil }
+        let parenOpen = textClose + 1
+        guard parenOpen < chars.count, chars[parenOpen] == "(",
+              let parenClose = matchParen(chars, openAt: parenOpen) else { return nil }
+        let interior = String(chars[(textOpen + 1)..<textClose])
+        let parenInner = String(chars[(parenOpen + 1)..<parenClose])
+        guard let (dest, title) = splitDestinationAndTitle(parenInner) else { return nil }
+        if isImage {
+            return (.image(source: dest, title: title, alt: inlinesToPlainText(parse(interior, depth: 0))), parenClose + 1)
+        }
+        return (.link(destination: dest, title: title, content: parse(interior, depth: 0)), parenClose + 1)
+    }
+
+    /// Reduces inline nodes to their plain-text content (image alt text): drops
+    /// emphasis/link markup, keeps code/text/alt/url, maps breaks to a space.
+    func inlinesToPlainText(_ inlines: [MarkdownInline]) -> String {
+        var out = ""
+        for inline in inlines {
+            switch inline {
+            case .text(let t): out += t
+            case .code(let c): out += c
+            case .emphasis(let c), .strong(let c), .strikethrough(let c): out += inlinesToPlainText(c)
+            case .link(_, _, let c): out += inlinesToPlainText(c)
+            case .image(_, _, let alt): out += alt
+            case .autolink(let url): out += url
+            case .footnoteReference(let id): out += "[^\(id)]"
+            case .softBreak, .hardBreak: out += " "
+            }
+        }
+        return out
     }
 
     /// Finds the index of a closing backtick run of exactly `n` backticks at or
