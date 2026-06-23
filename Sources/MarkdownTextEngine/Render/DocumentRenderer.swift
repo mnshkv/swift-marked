@@ -128,8 +128,15 @@ public enum DocumentRenderer {
                 ctx.setFillColor(red: 0.6, green: 0.6, blue: 0.6, alpha: 1.0)
                 ctx.fill(rect)
 
-            case .image, .table, .code:
-                // Not drawn in this wave
+            case .table(let tableRect, _, let rowYs, let cellLines, let borders):
+                guard tableRect.intersects(visible) else { continue }
+                drawTable(rowYs: rowYs, cellLines: cellLines, borders: borders, in: ctx, visible: visible)
+
+            case .code(let codeRect, let box, let lines, let langLabel):
+                guard codeRect.intersects(visible) else { continue }
+                drawCodeBlock(box: box, lines: lines, languageLabel: langLabel, in: ctx, visible: visible)
+
+            case .image:
                 break
             }
         }
@@ -148,6 +155,85 @@ public enum DocumentRenderer {
             ctx.textPosition = baseline
             CTLineDraw(line.ctLine, ctx)
         }
+    }
+
+    // MARK: - Table drawing
+
+    /// Draws a GFM table: grid borders and all cell CTLines.
+    private static func drawTable(
+        rowYs: [CGFloat],
+        cellLines: [[[LineFrame]]],
+        borders: [CGRect],
+        in ctx: CGContext,
+        visible: CGRect
+    ) {
+        // Draw border rects (thin dark lines)
+        ctx.setFillColor(red: 0.4, green: 0.4, blue: 0.4, alpha: 1.0)
+        for borderRect in borders {
+            guard borderRect.intersects(visible) else { continue }
+            ctx.fill(borderRect)
+        }
+
+        // Draw header row with a light grey background fill
+        if rowYs.count >= 2 {
+            let headerRect = CGRect(
+                x: borders.first?.minX ?? 0,
+                y: rowYs[0],
+                width: borders.first.map { _ in
+                    // compute from last border
+                    let allX = borders.map { $0.maxX }
+                    return (allX.max() ?? 0) - (borders.map { $0.minX }.min() ?? 0)
+                } ?? 0,
+                height: rowYs[1] - rowYs[0]
+            )
+            if headerRect.intersects(visible) && headerRect.width > 0 {
+                ctx.setFillColor(red: 0.94, green: 0.94, blue: 0.96, alpha: 1.0)
+                ctx.fill(headerRect)
+            }
+        }
+
+        // Draw cell text lines
+        for rowCellLines in cellLines {
+            for cellLineFrames in rowCellLines {
+                drawTextLines(cellLineFrames, in: ctx, visible: visible)
+            }
+        }
+    }
+
+    // MARK: - Code block drawing
+
+    /// The fill color components for the code block background box.
+    private static let codeBoxRed: CGFloat   = 0.95
+    private static let codeBoxGreen: CGFloat = 0.95
+    private static let codeBoxBlue: CGFloat  = 0.97
+
+    /// Draws a code block: filled background box, optional language label, and monospace CTLines.
+    private static func drawCodeBlock(
+        box: CGRect,
+        lines: [LineFrame],
+        languageLabel: LineFrame?,
+        in ctx: CGContext,
+        visible: CGRect
+    ) {
+        // Fill the background box
+        if box.intersects(visible) {
+            ctx.setFillColor(red: codeBoxRed, green: codeBoxGreen, blue: codeBoxBlue, alpha: 1.0)
+            ctx.fill(box)
+        }
+
+        // Draw language label (if any)
+        if let label = languageLabel {
+            let labelRect = CGRect(origin: label.origin, size: label.size)
+            if labelRect.intersects(visible) {
+                let baseline = CGPoint(x: label.origin.x, y: label.origin.y + label.ascent)
+                ctx.textMatrix = .identity
+                ctx.textPosition = baseline
+                CTLineDraw(label.ctLine, ctx)
+            }
+        }
+
+        // Draw code lines
+        drawTextLines(lines, in: ctx, visible: visible)
     }
 
     /// Draws a single list marker string at the given frame position.
