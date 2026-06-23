@@ -262,8 +262,31 @@ private struct _TextEngineRepresentable: NSViewRepresentable {
 // lived here (linkPayload, linkPayloadInRuns, inlineRunText) have been removed to
 // eliminate the duplicate implementation.
 
+/// A synthetic image provider for previews: returns a solid teal image with a
+/// gold stripe for any source, so block & inline images render visibly instead
+/// of showing the unresolved-image placeholder box.
+private struct PreviewImageProvider: ImageProvider {
+    func image(for source: String) async -> CGImage? {
+        let w = 320, h = 140
+        guard let ctx = CGContext(
+            data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.setFillColor(CGColor(red: 0.20, green: 0.55, blue: 0.70, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.setFillColor(CGColor(red: 0.96, green: 0.78, blue: 0.25, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: h / 2 - 10, width: w, height: 20))
+        return ctx.makeImage()
+    }
+}
+
 #Preview("MarkdownTextView") {
-    MarkdownTextView(.preview, onLink: { print("tapped link:", $0.token) })
-        .frame(maxWidth: 420)
-        .padding()
+//    ScrollView {
+        MarkdownTextView(.preview,
+                         onLink: { print("tapped link:", $0.token) },
+                         images: PreviewImageProvider())
+            .frame(maxWidth: 420)
+            .padding()
+//    }
 }
