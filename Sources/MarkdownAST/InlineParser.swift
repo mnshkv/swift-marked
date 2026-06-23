@@ -97,6 +97,21 @@ struct InlineParser {
                 i += n
                 continue
             }
+            // GFM extended (bare) autolinks, checked only where the char would
+            // otherwise be plain text.
+            if isAutolinkBoundary(chars, i), let (url, end) = scanBareURL(chars, from: i) {
+                flushText()
+                tokens.append(.literal(.autolink(url: url)))
+                i = end
+                continue
+            }
+            if c == "@", let (email, localLen, end) = scanBareEmail(buf: Array(buf), chars: chars, at: i) {
+                buf.removeLast(localLen)
+                flushText()
+                tokens.append(.literal(.autolink(url: email)))
+                i = end
+                continue
+            }
             buf.append(c)
             i += 1
         }
