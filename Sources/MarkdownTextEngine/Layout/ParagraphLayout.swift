@@ -49,9 +49,75 @@ private func appendRuns(_ runs: [InlineRun], into attrStr: CFMutableAttributedSt
         case .link(let innerRuns, _):
             appendRuns(innerRuns, into: attrStr, lastStyle: &lastStyle)
 
-        case .inlineImage:
-            // Placeholder: images not rendered in this wave
-            break
+        case .inlineImage(let attachment):
+            // Insert a single U+FFFC OBJECT REPLACEMENT CHARACTER as a placeholder.
+            // A CTRunDelegate is attached so CoreText reserves the correct ascent/descent/width
+            // for the image in the line — this makes the line height grow to fit the image.
+            //
+            // INDEX SPACE CONTRACT: the placeholder is ONE UTF-16 code unit (U+FFFC is in BMP),
+            // so `buildAttributedString` inserts exactly 1 UTF-16 unit per `.inlineImage` run.
+            // `textForRuns` must return a string of the same UTF-16 length (1) for the same run
+            // to keep the global offset space consistent. See TextPosition.swift.
+            let placeholder = "\u{FFFC}"
+            let placeholderLen = 1  // U+FFFC is a single UTF-16 unit
+
+            // Determine image display dimensions.
+            // We use intrinsicSize as-is (no line-height scaling for now).
+            let imgSize = (attachment.intrinsicSize.width > 0 && attachment.intrinsicSize.height > 0)
+                ? attachment.intrinsicSize
+                : CGSize(width: lastStyle.fontSize, height: lastStyle.fontSize)
+
+            // Build CTRunDelegate callbacks.
+            // The context is a heap-allocated box holding the image metrics so the
+            // closure captures are lifetime-safe for the CTRunDelegate.
+            final class ImageMetrics: @unchecked Sendable {
+                let width: CGFloat
+                let ascent: CGFloat
+                let descent: CGFloat
+                init(width: CGFloat, ascent: CGFloat, descent: CGFloat) {
+                    self.width = width; self.ascent = ascent; self.descent = descent
+                }
+            }
+            // Split total height into ascent (above baseline) = 80%, descent = 20%.
+            let imgAscent  = imgSize.height * 0.80
+            let imgDescent = imgSize.height * 0.20
+            let metrics = ImageMetrics(width: imgSize.width, ascent: imgAscent, descent: imgDescent)
+            let metricsPtr = Unmanaged.passRetained(metrics).toOpaque()
+
+            var callbacks = CTRunDelegateCallbacks(
+                version: kCTRunDelegateCurrentVersion,
+                dealloc: { ptr in
+                    Unmanaged<ImageMetrics>.fromOpaque(ptr).release()
+                },
+                getAscent: { ptr -> CGFloat in
+                    Unmanaged<ImageMetrics>.fromOpaque(ptr).takeUnretainedValue().ascent
+                },
+                getDescent: { ptr -> CGFloat in
+                    Unmanaged<ImageMetrics>.fromOpaque(ptr).takeUnretainedValue().descent
+                },
+                getWidth: { ptr -> CGFloat in
+                    Unmanaged<ImageMetrics>.fromOpaque(ptr).takeUnretainedValue().width
+                }
+            )
+
+            guard let delegate = CTRunDelegateCreate(&callbacks, metricsPtr) else { break }
+
+            let insertPos = CFAttributedStringGetLength(attrStr)
+            CFAttributedStringReplaceString(attrStr, CFRangeMake(insertPos, 0), placeholder as CFString)
+
+            // Apply the run delegate (and a font for fallback) to the placeholder character.
+            let font = ctFont(for: lastStyle)
+            let imgAttrs: [CFString: Any] = [
+                kCTRunDelegateAttributeName: delegate,
+                kCTFontAttributeName: font,
+                kCTForegroundColorAttributeName: lastStyle.color
+            ]
+            CFAttributedStringSetAttributes(
+                attrStr,
+                CFRangeMake(insertPos, placeholderLen),
+                imgAttrs as CFDictionary,
+                false
+            )
 
         case .lineBreak(let hard):
             // Apply the most recent text style (or the default if no text seen yet)

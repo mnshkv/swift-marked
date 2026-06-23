@@ -63,8 +63,8 @@ struct TextPositionTests {
         #expect(flattenedText(doc) == "click")
     }
 
-    @Test("inlineImage contributes no text")
-    func inlineImageSkipped() {
+    @Test("inlineImage contributes U+FFFC placeholder (1 UTF-16 unit)")
+    func inlineImagePlaceholder() {
         let s = TextStyle(fontSize: 17, color: .black)
         let img = ImageAttachment(source: "x.png", intrinsicSize: CGSize(width: 10, height: 10), alt: "img")
         let doc = TextDocument(blocks: [
@@ -74,7 +74,10 @@ struct TextPositionTests {
                 .text("B", s)
             ], style: .body))
         ])
-        #expect(flattenedText(doc) == "AB")
+        // INDEX SPACE CONTRACT: .inlineImage → U+FFFC (1 UTF-16 unit), matching
+        // the single placeholder character inserted by buildAttributedString.
+        #expect(flattenedText(doc) == "A\u{FFFC}B")
+        #expect(flattenedText(doc).utf16.count == 3)  // "A" + U+FFFC + "B"
     }
 
     @Test("non-paragraph blocks contribute nothing but still get separator")

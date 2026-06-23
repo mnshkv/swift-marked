@@ -46,8 +46,11 @@ public struct TextRange: Sendable {
 ///   - `.link(runs:_)` → recurse into inner runs
 ///   - `.lineBreak(hard: true)` → `"\n"`
 ///   - `.lineBreak(hard: false)` → `"\u{2028}"` (Unicode LINE SEPARATOR)
-///   - `.inlineImage` → (nothing)
-/// - All other block types contribute an empty string (zero-length placeholder).
+///   - `.inlineImage` → `"\u{FFFC}"` (U+FFFC OBJECT REPLACEMENT CHARACTER, 1 UTF-16 unit)
+///     INDEX SPACE CONTRACT: this must equal the UTF-16 length of the placeholder inserted
+///     by `buildAttributedString` for `.inlineImage` (also exactly 1 UTF-16 unit).
+/// - `.image` block → the attachment's `alt` text (block-level image; see textForBlock).
+/// - All other non-paragraph block types contribute an empty string.
 public func flattenedText(_ doc: TextDocument) -> String {
     var parts: [String] = []
     for block in doc.blocks {
@@ -108,7 +111,9 @@ func textForRuns(_ runs: [InlineRun]) -> String {
         case .link(let innerRuns, _):
             result += textForRuns(innerRuns)
         case .inlineImage:
-            break
+            // INDEX SPACE CONTRACT: must return exactly 1 UTF-16 unit to match the
+            // single U+FFFC placeholder character inserted by buildAttributedString.
+            result += "\u{FFFC}"
         case .lineBreak(let hard):
             result += hard ? "\n" : "\u{2028}"
         }
