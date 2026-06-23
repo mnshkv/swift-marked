@@ -390,8 +390,14 @@ func layoutTable(_ t: Table, width: CGFloat, origin: CGPoint) -> BlockFrame {
     // Build border rects
     var borders: [CGRect] = []
 
+    // The table box hugs its columns rather than stretching to the full available
+    // width. tableColumnWidths already fits the columns within `width`; using their
+    // sum keeps the horizontal borders aligned with the right column edge instead of
+    // leaving an empty boxed area on the right.
+    let columnsWidth = columnWidths.reduce(0, +)
+
     // Horizontal row dividers (lines between rows including top, bottom, and after-header)
-    let tableRight = origin.x + width
+    let tableRight = origin.x + columnsWidth
     for y in rowYs {
         borders.append(CGRect(x: origin.x, y: y, width: tableRight - origin.x, height: tableBorderThickness))
     }
@@ -409,7 +415,7 @@ func layoutTable(_ t: Table, width: CGFloat, origin: CGPoint) -> BlockFrame {
         xDiv += w
     }
 
-    let tableRect = CGRect(x: origin.x, y: origin.y, width: width, height: tableHeight)
+    let tableRect = CGRect(x: origin.x, y: origin.y, width: columnsWidth, height: tableHeight)
     return .table(rect: tableRect, columnX: columnX, rowYs: rowYs, cellLines: allCellLines, borders: borders)
 }
 
