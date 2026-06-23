@@ -50,7 +50,7 @@ public extension MarkdownRenderer {
                 // Footnote body blocks, each indented by definitionIndent
                 let fnBlocks = BlockMapper.map(fn.blocks, ctx: ctx, footnotes: footnoteNumbers)
                 for block in fnBlocks {
-                    blocks.append(indentBlock(block, by: style.spacing.definitionIndent))
+                    blocks.append(BlockMapper.indent(block, by: style.spacing.definitionIndent))
                 }
             }
         }
@@ -110,12 +110,4 @@ public extension MarkdownRenderer {
         }
         return .url(url)
     }
-}
-
-// MARK: - Private helpers
-
-private func indentBlock(_ block: Block, by amount: CGFloat) -> Block {
-    guard case .paragraph(var p) = block else { return block }
-    p.style.leadingIndent += amount
-    return .paragraph(p)
 }

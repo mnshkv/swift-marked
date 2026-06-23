@@ -105,7 +105,7 @@ enum BlockMapper {
         return result
     }
 
-    private static func indent(_ block: Block, by amount: CGFloat) -> Block {
+    static func indent(_ block: Block, by amount: CGFloat) -> Block {
         guard case .paragraph(var p) = block else { return block }
         p.style.leadingIndent += amount
         return .paragraph(p)
