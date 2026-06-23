@@ -67,6 +67,24 @@ public final class TextEngineView: UIView {
 
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         addGestureRecognizer(pan)
+
+        // Double-tap for word selection (Task 7.1).
+        let doubleTap = UITapGestureRecognizer(
+            target: self,
+            action: #selector(handleDoubleTap(_:))
+        )
+        doubleTap.numberOfTapsRequired = 2
+        addGestureRecognizer(doubleTap)
+    }
+
+    // MARK: - Double-tap word selection (Task 7.1)
+
+    @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended else { return }
+        let pt = gesture.location(in: self)
+        let range = wordSelection(at: pt, layout: docLayout, doc: document)
+        currentRange = range
+        updateSelectionRects()
     }
 
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
@@ -177,12 +195,20 @@ public final class TextEngineView: NSView {
     /// The anchor position when a drag begins (mouse-down point).
     private var dragAnchor: TextPosition? = nil
 
+    /// The range set by a double-click word-selection (Task 7.1).
+    private var currentWordRange: TextRange? = nil
+
     /// Cache of resolved CGImages keyed by source string.
     /// Populated asynchronously by `loadImages()` after each layout.
     private var imageCache: [String: CGImage] = [:]
 
     /// Set of image sources currently being loaded (to avoid duplicate requests).
     private var loadingImages: Set<String> = []
+
+    /// Set of image sources that returned `nil` from the provider (permanent failure).
+    /// Sources in this set are skipped on future layout cycles to avoid infinite retry loops.
+    /// Fix for Wave-6 review Minor #2.
+    private var failedImageSources: Set<String> = []
 
     // MARK: - Initialisation
 
@@ -203,6 +229,17 @@ public final class TextEngineView: NSView {
 
     public override func mouseDown(with event: NSEvent) {
         let pt = toDocPoint(convert(event.locationInWindow, from: nil))
+
+        // Double-click → word selection (Task 7.1).
+        if event.clickCount == 2 {
+            let range = wordSelection(at: pt, layout: docLayout, doc: document)
+            currentWordRange = range
+            currentSelectionRects = selectionRects(for: range, in: docLayout, doc: document)
+            dragAnchor = nil
+            return
+        }
+
+        currentWordRange = nil
         let pos = position(at: pt, in: docLayout, doc: document)
         dragAnchor = pos
         // Zero-length range at anchor — shows caret position
@@ -267,7 +304,13 @@ public final class TextEngineView: NSView {
         for block in docLayout.blocks {
             guard case .image(let rect, let attachment) = block else { continue }
             let source = attachment.source
-            guard imageCache[source] == nil, !loadingImages.contains(source) else { continue }
+            // Skip sources already resolved (cached) or currently in-flight.
+            // Also skip sources that previously returned nil (permanent failure) —
+            // without this guard the view would re-fire a Task on every resize,
+            // looping forever. Fix for Wave-6 review Minor #2.
+            guard imageCache[source] == nil,
+                  !loadingImages.contains(source),
+                  !failedImageSources.contains(source) else { continue }
             loadingImages.insert(source)
             Task { [weak self] in
                 guard let self else { return }
@@ -278,8 +321,11 @@ public final class TextEngineView: NSView {
                     self.imageCache[source] = cgImage
                     // Partial redraw: invalidate only the image's rect.
                     self.setNeedsDisplay(rect)
+                } else {
+                    // Mark as a permanent failure so future layouts don't re-fire
+                    // a Task for this source.
+                    self.failedImageSources.insert(source)
                 }
-                // If nil: leave placeholder (do not mark as loading again).
             }
         }
     }

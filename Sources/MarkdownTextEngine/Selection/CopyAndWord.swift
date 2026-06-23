@@ -1,4 +1,23 @@
 import Foundation
+import CoreGraphics
+
+// MARK: - Word selection helper (pure, unit-testable seam for double-tap)
+
+/// Returns a `TextRange` covering the word at `point` within `layout` / `doc`.
+///
+/// This is the pure seam extracted for unit testing of double-tap selection.
+/// The gesture wiring itself lives in `TextEngineView` (platform code).
+///
+/// Steps:
+///   1. Hit-test `point` → `TextPosition` (via `position(at:in:doc:)`).
+///   2. Expand that position to a word boundary via `wordRange(at:doc:)`.
+///
+/// A `nil` return means the point didn't land in any text (position == totalUTF16,
+/// or the word range at that position is zero-length).
+public func wordSelection(at point: CGPoint, layout: DocumentLayout, doc: TextDocument) -> TextRange {
+    let pos = position(at: point, in: layout, doc: doc)
+    return wordRange(at: pos, doc: doc)
+}
 
 // MARK: - Copy text
 
