@@ -1,6 +1,6 @@
 import CoreGraphics
 
-public struct TextStyle: Equatable {
+public struct TextStyle: Equatable, Sendable {
     public var fontSize: CGFloat
     public var isBold: Bool
     public var isItalic: Bool
@@ -14,16 +14,16 @@ public struct TextStyle: Equatable {
     }
 }
 
-public struct LinkPayload: Equatable { public var token: String; public init(_ token: String) { self.token = token } }
+public struct LinkPayload: Equatable, Sendable { public var token: String; public init(_ token: String) { self.token = token } }
 
-public struct ImageAttachment: Equatable {
+public struct ImageAttachment: Equatable, Sendable {
     public var source: String; public var intrinsicSize: CGSize; public var alt: String
     public init(source: String, intrinsicSize: CGSize, alt: String) {
         self.source = source; self.intrinsicSize = intrinsicSize; self.alt = alt
     }
 }
 
-public indirect enum InlineRun: Equatable {
+public indirect enum InlineRun: Equatable, Sendable {
     case text(String, TextStyle)
     case link(runs: [InlineRun], payload: LinkPayload)
     case inlineImage(ImageAttachment)

@@ -17,7 +17,7 @@ public struct ParagraphStyle: Equatable, Sendable {
     public static let body = ParagraphStyle()
 }
 
-public struct RuleStyle: Equatable {
+public struct RuleStyle: Equatable, Sendable {
     public var thickness: CGFloat; public var color: CGColor
     public init(thickness: CGFloat = 1, color: CGColor) { self.thickness = thickness; self.color = color }
 }

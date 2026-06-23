@@ -1,11 +1,11 @@
 import CoreGraphics
 
-public struct TextDocument: Equatable {
+public struct TextDocument: Equatable, Sendable {
     public var blocks: [Block]
     public init(blocks: [Block]) { self.blocks = blocks }
 }
 
-public indirect enum Block: Equatable {
+public indirect enum Block: Equatable, Sendable {
     case paragraph(Paragraph)
     case list(List)
     case quote(TextDocument)
@@ -15,21 +15,21 @@ public indirect enum Block: Equatable {
     case thematicBreak(RuleStyle)
 }
 
-public struct Paragraph: Equatable {
+public struct Paragraph: Equatable, Sendable {
     public var runs: [InlineRun]; public var style: ParagraphStyle
     public init(runs: [InlineRun], style: ParagraphStyle) { self.runs = runs; self.style = style }
 }
 
-public enum ListMarkerStyle: Equatable { case bullet, ordered(start: Int) }
+public enum ListMarkerStyle: Equatable, Sendable { case bullet, ordered(start: Int) }
 
-public struct List: Equatable {
+public struct List: Equatable, Sendable {
     public var marker: ListMarkerStyle; public var isTight: Bool; public var items: [TextDocument]
     public init(marker: ListMarkerStyle, isTight: Bool, items: [TextDocument]) {
         self.marker = marker; self.isTight = isTight; self.items = items
     }
 }
 
-public struct Table: Equatable {
+public struct Table: Equatable, Sendable {
     public var alignments: [TextAlignment]
     public var header: [[InlineRun]]
     public var rows: [[[InlineRun]]]
@@ -39,7 +39,7 @@ public struct Table: Equatable {
     }
 }
 
-public struct CodeBlock: Equatable {
+public struct CodeBlock: Equatable, Sendable {
     public var lines: [String]; public var language: String?; public var style: TextStyle
     public init(lines: [String], language: String?, style: TextStyle) {
         self.lines = lines; self.language = language; self.style = style
