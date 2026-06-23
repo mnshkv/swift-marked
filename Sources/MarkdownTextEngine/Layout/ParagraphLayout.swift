@@ -100,7 +100,10 @@ private func appendRuns(_ runs: [InlineRun], into attrStr: CFMutableAttributedSt
                 }
             )
 
-            guard let delegate = CTRunDelegateCreate(&callbacks, metricsPtr) else { break }
+            guard let delegate = CTRunDelegateCreate(&callbacks, metricsPtr) else {
+                Unmanaged<ImageMetrics>.fromOpaque(metricsPtr).release()
+                break
+            }
 
             let insertPos = CFAttributedStringGetLength(attrStr)
             CFAttributedStringReplaceString(attrStr, CFRangeMake(insertPos, 0), placeholder as CFString)

@@ -46,12 +46,29 @@ public struct EditMenuConfig: Sendable {
 
 /// A SwiftUI view that renders a `TextDocument` using CoreText + Core Graphics.
 ///
-/// Supports:
-/// - Multi-paragraph styled text rendered by `DocumentRenderer`.
-/// - Scrolling (via `ScrollView` or as a child in `List`/`LazyVStack`).
-/// - Drag selection (Wave 3 minimal; handles in Wave 7).
-/// - Link tap callbacks via `onLink`.
-/// - Asynchronous image loading via `ImageProvider` (images rendered in Wave 5).
+/// ## Supported features
+/// - Paragraphs with inline styled text (bold, italic, monospace, links)
+/// - Headings (h1–h6 via `ParagraphStyle.leadingIndent` / font size)
+/// - Ordered and unordered lists (including nested lists)
+/// - Block quotes with left-edge bar
+/// - GFM tables (header + body rows, column alignment)
+/// - Fenced code blocks (monospace, background tint, optional language label)
+/// - Block-level and inline images (async loading via `ImageProvider`)
+/// - Thematic breaks (horizontal rule)
+/// - Link taps (inline link highlight on press + `onLink` callback)
+/// - Document-wide text selection (drag / long-press, word selection on double-click/double-tap)
+/// - Copy (plain text) via edit menu
+/// - Word selection on double-click / double-tap
+///
+/// ## Documented limitations (v1)
+/// - **Links inside block quotes / list items**: not yet tap/highlight-reachable
+///   (hit-testing does not recurse into nested `DocumentLayout`s).
+/// - **Selection loupe / magnifier**: deferred; handle knobs drawn at selection ends only.
+/// - **RTL / bidirectional text**: deferred; LTR layout only.
+/// - **Horizontal code scroll**: deferred; long code lines wrap inside the block.
+/// - **Layout virtualization**: deferred; full layout is computed for the whole document;
+///   only drawing is windowed (blocks outside the visible rect are skipped).
+/// - **Rich / Markdown copy**: deferred; copy produces plain text only.
 ///
 /// ### Architecture boundary
 /// `MarkdownTextView` is a thin SwiftUI shim. All layout and drawing logic lives
@@ -126,6 +143,7 @@ private struct _TextEngineRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> TextEngineView {
         let view = TextEngineView()
         view.document = document
+        view.isSelectable = isSelectable
         view.editMenuConfig = editMenu
         // Tap gesture for link detection
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
@@ -135,6 +153,7 @@ private struct _TextEngineRepresentable: UIViewRepresentable {
 
     func updateUIView(_ uiView: TextEngineView, context: Context) {
         uiView.document = document
+        uiView.isSelectable = isSelectable
         uiView.editMenuConfig = editMenu
         context.coordinator.onLink = onLink
         context.coordinator.view = uiView
@@ -184,6 +203,7 @@ private struct _TextEngineRepresentable: NSViewRepresentable {
     func makeNSView(context: Context) -> TextEngineView {
         let view = TextEngineView()
         view.document = document
+        view.isSelectable = isSelectable
         view.editMenuConfig = editMenu
         // Click gesture for link detection
         let click = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleClick(_:)))
@@ -193,6 +213,7 @@ private struct _TextEngineRepresentable: NSViewRepresentable {
 
     func updateNSView(_ nsView: TextEngineView, context: Context) {
         nsView.document = document
+        nsView.isSelectable = isSelectable
         nsView.editMenuConfig = editMenu
         context.coordinator.onLink = onLink
         context.coordinator.view = nsView

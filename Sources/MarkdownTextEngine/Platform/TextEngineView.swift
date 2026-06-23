@@ -33,6 +33,10 @@ public final class TextEngineView: UIView {
     /// Edit menu configuration (Task 7.3). Updated by the SwiftUI representable.
     public var editMenuConfig: EditMenuConfig = .standard
 
+    /// When false, drag-selection, long-press, and double-tap selection are disabled.
+    /// Link taps remain active regardless.
+    public var isSelectable: Bool = true
+
     // MARK: - Internal state (accessible within the module for representable coordination)
 
     /// The most recently computed layout. Exposed internally so the SwiftUI
@@ -92,6 +96,7 @@ public final class TextEngineView: UIView {
     // MARK: - Double-tap word selection (Task 7.1)
 
     @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+        guard isSelectable else { return }
         guard gesture.state == .ended else { return }
         let pt = gesture.location(in: self)
         let range = wordSelection(at: pt, layout: docLayout, doc: document)
@@ -117,6 +122,7 @@ public final class TextEngineView: UIView {
     // MARK: - Long-press to show edit menu (Task 7.3)
 
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard isSelectable else { return }
         guard gesture.state == .began else { return }
         let pt = gesture.location(in: self)
 
@@ -137,6 +143,7 @@ public final class TextEngineView: UIView {
     }
 
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
+        guard isSelectable else { return }
         guard gesture.state == .changed || gesture.state == .ended else {
             if gesture.state == .cancelled { clearSelection(); return }
             return
@@ -350,6 +357,10 @@ public final class TextEngineView: NSView {
     /// Edit menu configuration (Task 7.3). Updated by the SwiftUI representable.
     public var editMenuConfig: EditMenuConfig = .standard
 
+    /// When false, drag-selection and double-click selection are disabled.
+    /// Link taps remain active regardless.
+    public var isSelectable: Bool = true
+
     // MARK: - Internal state (accessible within the module for representable coordination)
 
     /// The most recently computed layout. Exposed internally so the SwiftUI
@@ -408,6 +419,7 @@ public final class TextEngineView: NSView {
 
         // Double-click → word selection (Task 7.1). No link highlight on double-click.
         if event.clickCount == 2 {
+            guard isSelectable else { return }
             pressedLinkRects = []
             let range = wordSelection(at: pt, layout: docLayout, doc: document)
             currentWordRange = range
@@ -417,13 +429,14 @@ public final class TextEngineView: NSView {
             return
         }
 
-        // Task 7.4: highlight link on mouse-down.
+        // Task 7.4: highlight link on mouse-down (always active, regardless of isSelectable).
         if let (_, linkRng) = linkRange(at: pt, layout: docLayout, doc: document) {
             pressedLinkRects = selectionRects(for: linkRng, in: docLayout, doc: document)
         } else {
             pressedLinkRects = []
         }
 
+        guard isSelectable else { return }
         currentWordRange = nil
         let pos = position(at: pt, in: docLayout, doc: document)
         dragAnchor = pos
@@ -510,19 +523,19 @@ public final class TextEngineView: NSView {
         guard let range = currentRange else { return }
         let text = copyText(for: range, doc: document)
         guard !text.isEmpty else { return }
-        NSWorkspace.shared.open(
-            URL(string: "dict://\(text.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")")
-            ?? URL(string: "dict://")!
-        )
+        let dictBase = "dict://"
+        let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+        if let url = URL(string: dictBase + encoded) ?? URL(string: dictBase) {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     @objc private func performShare(_ sender: Any?) {
         guard let range = currentRange else { return }
         let text = copyText(for: range, doc: document)
-        guard !text.isEmpty, let window else { return }
+        guard !text.isEmpty, self.window != nil else { return }
         let picker = NSSharingServicePicker(items: [text])
         picker.show(relativeTo: .zero, of: self, preferredEdge: .minY)
-        _ = window  // suppress unused-warning
     }
 
     // Accept mouse events
