@@ -204,7 +204,10 @@ public final class TextEngineView: UIView {
     }
 
     public override var intrinsicContentSize: CGSize {
-        docLayout.contentSize
+        // Width is flexible — the view fills its container's width. Only the content
+        // height is intrinsic; reporting a fixed width makes the view overflow its
+        // container horizontally (e.g. a full-width table running off screen).
+        CGSize(width: UIView.noIntrinsicMetric, height: docLayout.contentSize.height)
     }
 
     // MARK: - Async image loading
@@ -628,7 +631,9 @@ public final class TextEngineView: NSView {
     }
 
     public override var intrinsicContentSize: NSSize {
-        docLayout.contentSize
+        // Width is flexible — the view fills its container's width; only the
+        // content height is intrinsic.
+        NSSize(width: NSView.noIntrinsicMetric, height: docLayout.contentSize.height)
     }
 
     // MARK: - Async image loading (Task 6.3)
