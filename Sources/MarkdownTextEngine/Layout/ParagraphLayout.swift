@@ -541,6 +541,30 @@ func layoutQuote(_ innerDoc: TextDocument, width: CGFloat, origin: CGPoint) -> B
     return .quote(rect: quoteRect, inner: innerLayout, barRect: barRect)
 }
 
+// MARK: - Block image layout
+
+/// Placeholder size used when `intrinsicSize` is zero (width == 0 or height == 0).
+let imagePlaceholderSize = CGSize(width: 200, height: 150)
+
+/// Lays out a block `ImageAttachment` into a `BlockFrame.image`.
+///
+/// - The image rect is scaled to fit `width` while preserving aspect ratio.
+/// - If `intrinsicSize` is zero in either dimension, `imagePlaceholderSize` is used instead.
+/// - The image is NOT loaded here (layout is pure/synchronous).
+func layoutImage(_ attachment: ImageAttachment, width: CGFloat, origin: CGPoint) -> BlockFrame {
+    let intrinsic = (attachment.intrinsicSize.width > 0 && attachment.intrinsicSize.height > 0)
+        ? attachment.intrinsicSize
+        : imagePlaceholderSize
+
+    // Scale down to fit width (preserve aspect ratio); never scale up.
+    let scale = intrinsic.width > width ? width / intrinsic.width : 1.0
+    let imgWidth = intrinsic.width * scale
+    let imgHeight = intrinsic.height * scale
+
+    let rect = CGRect(x: origin.x, y: origin.y, width: imgWidth, height: imgHeight)
+    return .image(rect: rect, attachment: attachment)
+}
+
 // MARK: - LayoutEngine
 
 public enum LayoutEngine {
@@ -582,11 +606,12 @@ public enum LayoutEngine {
                 contentHeight = cursorY - origin.y
 
             case .image(let attachment):
-                let imgSize = attachment.intrinsicSize
-                let rect = CGRect(x: origin.x, y: cursorY, width: imgSize.width, height: imgSize.height)
-                blockFrames.append(.image(rect: rect, attachment: attachment))
-                cursorY += imgSize.height
-                contentHeight = cursorY - origin.y
+                let frame = layoutImage(attachment, width: width, origin: CGPoint(x: origin.x, y: cursorY))
+                blockFrames.append(frame)
+                if case .image(let rect, _) = frame {
+                    cursorY = rect.maxY
+                    contentHeight = rect.maxY - origin.y
+                }
 
             case .codeBlock(let cb):
                 let codeFrame = layoutCodeBlock(cb, width: width, origin: CGPoint(x: origin.x, y: cursorY))
