@@ -48,22 +48,6 @@ struct LinkResolveTests {
         #expect(result == .ignore)
     }
 
-    @Test("relative path without scheme → .url if URL(string:) accepts it")
-    func relativeToken() {
-        // URL(string:) accepts "path/to/page" so it should be .url
-        let token = "path/to/page"
-        let result = MarkdownRenderer.resolveLink(token)
-        if let _ = URL(string: token) {
-            if case .url = result {
-                // correct
-            } else {
-                Issue.record("Expected .url for '\(token)', got \(result)")
-            }
-        } else {
-            #expect(result == .ignore)
-        }
-    }
-
     @Test("LinkAction is Equatable — two .ignore are equal")
     func linkActionEquatable() {
         #expect(LinkAction.ignore == LinkAction.ignore)

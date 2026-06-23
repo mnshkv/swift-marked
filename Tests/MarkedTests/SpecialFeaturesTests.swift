@@ -171,9 +171,10 @@ struct SpecialFeaturesTests {
     @Test("paragraph with image + non-whitespace text → stays .paragraph (inline image)")
     func mixedParagraphStaysInline() {
         let blocks = map([.paragraph(content: [.text("see "), .image(source: "i", title: nil, alt: "a")])])
-        guard case .paragraph(_) = blocks.first else {
+        guard case .paragraph(let p) = blocks.first else {
             Issue.record("Expected .paragraph (not promoted)"); return
         }
+        #expect(p.runs.contains { if case .inlineImage = $0 { true } else { false } })
     }
 
     @Test("paragraph with whitespace around image → promoted to block .image")

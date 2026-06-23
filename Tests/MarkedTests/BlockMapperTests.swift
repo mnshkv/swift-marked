@@ -61,12 +61,13 @@ struct BlockMapperTests {
         #expect(cb.language == "swift")
     }
 
-    @Test("thematicBreak → .thematicBreak")
+    @Test("thematicBreak → .thematicBreak with rule color")
     func thematicBreak() {
         let blocks = map([.thematicBreak])
-        guard case .thematicBreak(_) = blocks.first else {
+        guard case .thematicBreak(let rs) = blocks.first else {
             Issue.record("Expected .thematicBreak"); return
         }
+        #expect(rs.color == ctx.palette.rule)
     }
 
     @Test("table alignment mapping: .left→.leading, .center→.center, .right→.trailing")

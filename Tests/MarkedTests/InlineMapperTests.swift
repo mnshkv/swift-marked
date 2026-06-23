@@ -89,7 +89,7 @@ struct InlineMapperTests {
         }
         #expect(attachment.source == "s")
         #expect(attachment.alt == "a")
-        #expect(attachment.intrinsicSize == CGSize(width: 18, height: 18))
+        #expect(attachment.intrinsicSize == ctx.style.inlineImageSize)
     }
 
     @Test("footnoteReference → .link text '[3]', payload 'footnote:fn'")
