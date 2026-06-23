@@ -5,6 +5,10 @@ let package = Package(
     products: [.library(name: "MarkdownAST", targets: ["MarkdownAST"])],
     targets: [
         .target(name: "MarkdownAST"),
-        .testTarget(name: "MarkdownASTTests", dependencies: ["MarkdownAST"]),
+        .testTarget(
+            name: "MarkdownASTTests",
+            dependencies: ["MarkdownAST"],
+            resources: [.copy("Fixtures/commonmark-spec.json")]
+        ),
     ]
 )
