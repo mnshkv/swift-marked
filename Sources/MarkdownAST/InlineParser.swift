@@ -10,68 +10,18 @@ struct InlineParser {
     /// ASCII-punctuation characters a backslash can escape (CommonMark §2.4).
     private static let escapable: Set<Character> = Set("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
 
-    /// Parses `text` into inline nodes: plain text with backslash escapes, GFM
-    /// footnote references (`[^id]`), and full reference links (`[text][label]`)
-    /// resolved against `defs`. Unresolved brackets stay literal text.
+    /// Parses `text` into inline nodes: tokenize into literals and emphasis
+    /// delimiters, pair the delimiters into emphasis/strong, then coalesce
+    /// adjacent text.
     func parse(_ text: String, depth: Int) -> [MarkdownInline] {
-        let chars = Array(text)
-        var result: [MarkdownInline] = []
-        var buf = ""
-        func flushText() {
-            if !buf.isEmpty { result.append(.text(buf)); buf = "" }
-        }
-        var i = 0
-        while i < chars.count {
-            let c = chars[i]
-            if c == "\\", i + 1 < chars.count, Self.escapable.contains(chars[i + 1]) {
-                buf.append(chars[i + 1])
-                i += 2
-                continue
-            }
-            if c == "`" {
-                // Code span: an opening backtick run is closed by a run of equal
-                // length; content is verbatim (no escapes). An unmatched run is
-                // literal text.
-                var n = 0
-                while i + n < chars.count, chars[i + n] == "`" { n += 1 }
-                if let close = findClosingBacktickRun(chars, from: i + n, length: n) {
-                    flushText()
-                    result.append(.code(codeSpanContent(chars, from: i + n, to: close)))
-                    i = close + n
-                } else {
-                    buf.append(String(repeating: "`", count: n))
-                    i += n
-                }
-                continue
-            }
-            if c == "[" {
-                if i + 1 < chars.count, chars[i + 1] == "^",
-                   let (id, end) = scanFootnoteRef(chars, from: i), defs.hasFootnote(id) {
-                    flushText()
-                    result.append(.footnoteReference(id: id))
-                    i = end
-                    continue
-                }
-                if let (linkText, label, end) = scanReferenceLink(chars, from: i),
-                   let def = defs.link(for: label) {
-                    flushText()
-                    result.append(.link(destination: def.destination, title: def.title,
-                                        content: parse(linkText, depth: depth + 1)))
-                    i = end
-                    continue
-                }
-            }
-            buf.append(c)
-            i += 1
-        }
-        flushText()
-        return result
+        coalesceText(processEmphasis(tokenize(text, depth: depth)))
     }
 
-    /// Tokenizes `text` into emphasis/strikethrough delimiter runs (`*`/`_`, and
-    /// `~` runs of ≥2) and literal inline text. Adjacent text between delimiters
-    /// is merged into one `.literal(.text(...))`; a lone `~` is literal.
-    func tokenize(_ text: String) -> [InlineToken] {
+    /// Scans `text` into `InlineToken`s: backslash escapes, code spans, footnote
+    /// references, and reference links become `.literal`; `*`/`_` runs and `~`
+    /// runs of ≥2 become `.delim` (with flanking). Text between delimiters is
+    /// merged into one `.literal(.text(...))`; a lone `~` is literal text.
+    func tokenize(_ text: String, depth: Int = 0) -> [InlineToken] {
         let chars = Array(text)
         var tokens: [InlineToken] = []
         var buf = ""
@@ -85,6 +35,36 @@ struct InlineParser {
                 buf.append(chars[i + 1])
                 i += 2
                 continue
+            }
+            if c == "`" {
+                var n = 0
+                while i + n < chars.count, chars[i + n] == "`" { n += 1 }
+                if let close = findClosingBacktickRun(chars, from: i + n, length: n) {
+                    flushText()
+                    tokens.append(.literal(.code(codeSpanContent(chars, from: i + n, to: close))))
+                    i = close + n
+                } else {
+                    buf.append(String(repeating: "`", count: n))
+                    i += n
+                }
+                continue
+            }
+            if c == "[" {
+                if i + 1 < chars.count, chars[i + 1] == "^",
+                   let (id, end) = scanFootnoteRef(chars, from: i), defs.hasFootnote(id) {
+                    flushText()
+                    tokens.append(.literal(.footnoteReference(id: id)))
+                    i = end
+                    continue
+                }
+                if let (linkText, label, end) = scanReferenceLink(chars, from: i),
+                   let def = defs.link(for: label) {
+                    flushText()
+                    tokens.append(.literal(.link(destination: def.destination, title: def.title,
+                                                 content: parse(linkText, depth: depth + 1))))
+                    i = end
+                    continue
+                }
             }
             if c == "*" || c == "_" || c == "~" {
                 var n = 0

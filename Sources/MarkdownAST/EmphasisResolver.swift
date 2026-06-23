@@ -39,6 +39,127 @@ enum InlineToken: Equatable {
     case delim(char: Character, count: Int, origCount: Int, canOpen: Bool, canClose: Bool)
 }
 
+/// One node in the working doubly-linked list used by `processEmphasis`:
+/// either resolved inline content or a still-active delimiter run.
+private final class EmphNode {
+    enum Kind {
+        case inline(MarkdownInline)
+        case delim(char: Character, count: Int, origCount: Int, canOpen: Bool, canClose: Bool)
+    }
+    var kind: Kind
+    var prev: EmphNode?
+    var next: EmphNode?
+    init(_ kind: Kind) { self.kind = kind }
+}
+
+private func emphNodeInlines(_ node: EmphNode) -> [MarkdownInline] {
+    switch node.kind {
+    case .inline(let inline):
+        return [inline]
+    case .delim(let char, let count, _, _, _):
+        return count > 0 ? [.text(String(repeating: char, count: count))] : []
+    }
+}
+
+/// Pairs `*`/`_` emphasis delimiters in a token stream into `.emphasis`/`.strong`
+/// nodes via the canonical CommonMark `process_emphasis` (delimiter list,
+/// `openers_bottom`, rule of 3). Unpaired delimiters flatten to literal text;
+/// `~` delimiters are left untouched for the strikethrough pass.
+func processEmphasis(_ tokens: [InlineToken]) -> [MarkdownInline] {
+    var head: EmphNode?
+    var tail: EmphNode?
+    for token in tokens {
+        let node: EmphNode
+        switch token {
+        case .literal(let inline):
+            node = EmphNode(.inline(inline))
+        case .delim(let char, let count, let origCount, let canOpen, let canClose):
+            node = EmphNode(.delim(char: char, count: count, origCount: origCount, canOpen: canOpen, canClose: canClose))
+        }
+        node.prev = tail
+        tail?.next = node
+        if head == nil { head = node }
+        tail = node
+    }
+
+    var openersBottom: [String: EmphNode?] = [:]
+    var closer = head
+    while let cur = closer {
+        guard case .delim(let cchar, let ccount, let corig, let ccanOpen, let ccanClose) = cur.kind,
+              ccanClose, cchar == "*" || cchar == "_" else {
+            closer = cur.next
+            continue
+        }
+        let obKey = "\(cchar)\(ccanOpen)\(corig % 3)"
+        let floor: EmphNode? = openersBottom[obKey] ?? nil
+
+        var opener = cur.prev
+        var matched: EmphNode?
+        while let op = opener, op !== floor {
+            if case .delim(let ochar, _, let oorig, let ocanOpen, _) = op.kind, ocanOpen, ochar == cchar {
+                let oddMatch = (ccanOpen || isCanClose(op))
+                    && (corig + oorig) % 3 == 0
+                    && !(corig % 3 == 0 && oorig % 3 == 0)
+                if !oddMatch { matched = op; break }
+            }
+            opener = op.prev
+        }
+
+        guard let op = matched,
+              case .delim(let ochar, let ocount, let oorig, let ocanOpen, let ocanClose) = op.kind else {
+            openersBottom[obKey] = cur.prev
+            if !ccanOpen { cur.kind = .inline(.text(String(repeating: cchar, count: ccount))) }
+            closer = cur.next
+            continue
+        }
+
+        let strong = ocount >= 2 && ccount >= 2
+        let use = strong ? 2 : 1
+
+        var inner: [MarkdownInline] = []
+        var between = op.next
+        while let node = between, node !== cur {
+            inner.append(contentsOf: emphNodeInlines(node))
+            between = node.next
+        }
+        let wrapped = EmphNode(.inline(strong ? .strong(inner) : .emphasis(inner)))
+        op.next = wrapped; wrapped.prev = op
+        wrapped.next = cur; cur.prev = wrapped
+
+        if ocount - use > 0 {
+            op.kind = .delim(char: ochar, count: ocount - use, origCount: oorig, canOpen: ocanOpen, canClose: ocanClose)
+        } else {
+            let p = op.prev
+            wrapped.prev = p
+            if let p { p.next = wrapped } else { head = wrapped }
+        }
+
+        if ccount - use > 0 {
+            cur.kind = .delim(char: cchar, count: ccount - use, origCount: corig, canOpen: ccanOpen, canClose: ccanClose)
+            // closer keeps remaining length — re-loop to pair it again
+        } else {
+            let nx = cur.next
+            wrapped.next = nx
+            nx?.prev = wrapped
+            closer = nx
+        }
+    }
+
+    var result: [MarkdownInline] = []
+    var node = head
+    while let n = node {
+        result.append(contentsOf: emphNodeInlines(n))
+        node = n.next
+    }
+    return result
+}
+
+/// Whether an `EmphNode` delimiter can close (used inside the rule-of-3 check).
+private func isCanClose(_ node: EmphNode) -> Bool {
+    if case .delim(_, _, _, _, let canClose) = node.kind { return canClose }
+    return false
+}
+
 /// CommonMark "punctuation": ASCII punctuation, or a Unicode punctuation/symbol
 /// character. (Swift's `isPunctuation` alone misses ASCII symbols like `~`.)
 func isCommonMarkPunctuation(_ c: Character?) -> Bool {
