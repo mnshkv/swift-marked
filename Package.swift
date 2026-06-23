@@ -6,6 +6,7 @@ let package = Package(
     products: [
         .library(name: "MarkdownAST", targets: ["MarkdownAST"]),
         .library(name: "MarkdownTextEngine", targets: ["MarkdownTextEngine"]),
+        .library(name: "Marked", targets: ["Marked"]),
     ],
     targets: [
         .target(name: "MarkdownAST"),
@@ -13,5 +14,7 @@ let package = Package(
                     resources: [.copy("Fixtures/commonmark-spec.json")]),
         .target(name: "MarkdownTextEngine"),
         .testTarget(name: "MarkdownTextEngineTests", dependencies: ["MarkdownTextEngine"]),
+        .target(name: "Marked", dependencies: ["MarkdownAST", "MarkdownTextEngine"]),
+        .testTarget(name: "MarkedTests", dependencies: ["Marked"]),
     ]
 )
