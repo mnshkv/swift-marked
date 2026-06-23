@@ -2,6 +2,7 @@
 import PackageDescription
 let package = Package(
     name: "swiftui-markdown",
+    platforms: [.iOS("26.0"), .macOS("14.0")],
     products: [
         .library(name: "MarkdownAST", targets: ["MarkdownAST"]),
         .library(name: "MarkdownTextEngine", targets: ["MarkdownTextEngine"]),

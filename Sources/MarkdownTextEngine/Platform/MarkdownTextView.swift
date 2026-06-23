@@ -261,3 +261,9 @@ private struct _TextEngineRepresentable: NSViewRepresentable {
 // in Selection/LinkHitTesting.swift. The private link-walking helpers that previously
 // lived here (linkPayload, linkPayloadInRuns, inlineRunText) have been removed to
 // eliminate the duplicate implementation.
+
+#Preview("MarkdownTextView") {
+    MarkdownTextView(.preview, onLink: { print("tapped link:", $0.token) })
+        .frame(maxWidth: 420)
+        .padding()
+}
