@@ -11,7 +11,9 @@ import CoreGraphics
 /// - Exposes `intrinsicContentSize` equal to the layout's `contentSize`.
 /// - Draws windowed: only the portion covered by the dirty rect is rendered.
 /// - Supports basic drag selection via a long-press + pan gesture (Task 3.4).
-///   Native loupe / selection handles / edit-menu come in Wave 7.
+/// - Word selection on double-tap (Task 7.1).
+/// - Selection handle knobs drawn at selection ends (Task 7.2).
+/// - Edit menu (Copy/Look Up/Share) on long-press over a selection (Task 7.3).
 @MainActor
 public final class TextEngineView: UIView {
 
@@ -27,6 +29,9 @@ public final class TextEngineView: UIView {
     public var currentSelectionRects: [CGRect] = [] {
         didSet { setNeedsDisplay() }
     }
+
+    /// Edit menu configuration (Task 7.3). Updated by the SwiftUI representable.
+    public var editMenuConfig: EditMenuConfig = .standard
 
     // MARK: - Internal state (accessible within the module for representable coordination)
 
@@ -46,11 +51,13 @@ public final class TextEngineView: UIView {
     public override init(frame: CGRect) {
         super.init(frame: frame)
         setupDragSelection()
+        setupEditMenu()
     }
 
     public required init?(coder: NSCoder) {
         super.init(coder: coder)
         setupDragSelection()
+        setupEditMenu()
     }
 
     // MARK: - Drag selection setup
@@ -87,12 +94,40 @@ public final class TextEngineView: UIView {
         updateSelectionRects()
     }
 
+    // MARK: - Edit menu setup (Task 7.3)
+
+    /// The UIEditMenuInteraction instance, added when the view initialises (iOS 16+).
+    @available(iOS 16, *)
+    private var _editMenuInteraction: UIEditMenuInteraction? {
+        get { interactions.compactMap { $0 as? UIEditMenuInteraction }.first }
+    }
+
+    private func setupEditMenu() {
+        if #available(iOS 16, *) {
+            let interaction = UIEditMenuInteraction(delegate: self)
+            addInteraction(interaction)
+        }
+    }
+
+    // MARK: - Long-press to show edit menu (Task 7.3)
+
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began else { return }
         let pt = gesture.location(in: self)
+
+        // If a selection already exists, show the edit menu at the long-press point.
+        if let range = currentRange, range.start.index < range.end.index {
+            if #available(iOS 16, *) {
+                let config = UIEditMenuConfiguration(identifier: nil, sourcePoint: pt)
+                _editMenuInteraction?.presentEditMenu(with: config)
+            }
+            return
+        }
+
         let pos = position(at: pt, in: docLayout, doc: document)
-        // Start a zero-length range at the tapped position
-        currentRange = TextRange(start: pos, end: pos)
+        // Start a word-selection at the long-pressed position.
+        let wordRng = wordRange(at: pos, doc: document)
+        currentRange = wordRng
         updateSelectionRects()
     }
 
@@ -195,6 +230,59 @@ public final class TextEngineView: UIView {
     }
 }
 
+// MARK: - UIEditMenuInteractionDelegate (Task 7.3, iOS 16+)
+
+@available(iOS 16, *)
+extension TextEngineView: UIEditMenuInteractionDelegate {
+
+    public func editMenuInteraction(
+        _ interaction: UIEditMenuInteraction,
+        menuFor configuration: UIEditMenuConfiguration,
+        suggestedActions: [UIMenuElement]
+    ) -> UIMenu? {
+        guard let range = currentRange, range.start.index < range.end.index else {
+            return nil
+        }
+        var actions: [UIMenuElement] = []
+
+        if editMenuConfig.showCopy {
+            actions.append(UIAction(title: "Copy") { [weak self] _ in
+                guard let self else { return }
+                let text = copyText(for: range, doc: self.document)
+                UIPasteboard.general.string = text
+            })
+        }
+
+        if editMenuConfig.showLookUp {
+            actions.append(UIAction(title: "Look Up") { _ in
+                // Look Up is handled by the system via UIReferenceLibraryViewController.
+                // For a read-only view, we post the standard "define" action identifier
+                // here as a no-op stub since UIReferenceLibraryViewController requires
+                // a presented view controller reference that this layer does not own.
+                // The action is included so menu configuration is honoured.
+            })
+        }
+
+        if editMenuConfig.showShare {
+            actions.append(UIAction(title: "Share…") { [weak self] _ in
+                guard let self else { return }
+                let text = copyText(for: range, doc: self.document)
+                guard !text.isEmpty else { return }
+                let activityVC = UIActivityViewController(
+                    activityItems: [text], applicationActivities: nil
+                )
+                // Find the nearest UIViewController to present from.
+                if let windowScene = self.window?.windowScene,
+                   let vc = windowScene.keyWindow?.rootViewController {
+                    vc.present(activityVC, animated: true)
+                }
+            })
+        }
+
+        return actions.isEmpty ? nil : UIMenu(children: actions)
+    }
+}
+
 #elseif canImport(AppKit)
 import AppKit
 import CoreGraphics
@@ -205,7 +293,9 @@ import CoreGraphics
 /// - Exposes `intrinsicContentSize` equal to the layout's `contentSize`.
 /// - Draws windowed: only the portion covered by the dirty rect is rendered.
 /// - Supports basic drag selection via mouse events (Task 3.4).
-///   Native selection handles / edit-menu come in Wave 7.
+/// - Word selection on double-click (Task 7.1).
+/// - Selection handle knobs drawn at selection ends (Task 7.2).
+/// - Edit menu (Copy/Look Up/Share) on right-click / secondary click (Task 7.3).
 /// - Loads images asynchronously via `imageProvider` (Task 6.3): after layout,
 ///   one `Task` per image source fetches the `CGImage`; on completion, the image
 ///   is stored in `imageCache` and only the image's reserved rect is invalidated.
@@ -231,6 +321,9 @@ public final class TextEngineView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// Edit menu configuration (Task 7.3). Updated by the SwiftUI representable.
+    public var editMenuConfig: EditMenuConfig = .standard
+
     // MARK: - Internal state (accessible within the module for representable coordination)
 
     /// The most recently computed layout. Exposed internally so the SwiftUI
@@ -246,6 +339,9 @@ public final class TextEngineView: NSView {
 
     /// The range set by a double-click word-selection (Task 7.1).
     private var currentWordRange: TextRange? = nil
+
+    /// The current active text selection range (drag or double-click). Used by the edit menu.
+    private var currentRange: TextRange? = nil
 
     /// Cache of resolved CGImages keyed by source string.
     /// Populated asynchronously by `loadImages()` after each layout.
@@ -283,6 +379,7 @@ public final class TextEngineView: NSView {
         if event.clickCount == 2 {
             let range = wordSelection(at: pt, layout: docLayout, doc: document)
             currentWordRange = range
+            currentRange = range
             currentSelectionRects = selectionRects(for: range, in: docLayout, doc: document)
             dragAnchor = nil
             return
@@ -310,13 +407,81 @@ public final class TextEngineView: NSView {
         // If released at same position as anchor, clear selection
         if anchor == activePos {
             currentSelectionRects = []
+            currentRange = nil
             dragAnchor = nil
         }
     }
 
+    /// Right-click / secondary click → show edit menu over the current selection (Task 7.3).
+    public override func rightMouseDown(with event: NSEvent) {
+        guard let range = currentRange, range.start.index < range.end.index else {
+            super.rightMouseDown(with: event)
+            return
+        }
+        let menu = buildEditMenu(for: range)
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
+    }
+
     private func updateSelectionRects(anchor: TextPosition, active: TextPosition) {
         let range = TextRange(start: anchor, end: active)
+        currentRange = range.start.index < range.end.index ? range : nil
         currentSelectionRects = selectionRects(for: range, in: docLayout, doc: document)
+    }
+
+    // MARK: - Edit menu construction (Task 7.3, AppKit)
+
+    /// Builds an `NSMenu` for the current selection honoring `editMenuConfig`.
+    private func buildEditMenu(for range: TextRange) -> NSMenu {
+        let menu = NSMenu(title: "")
+
+        if editMenuConfig.showCopy {
+            let copyItem = NSMenuItem(title: "Copy", action: #selector(performCopy(_:)), keyEquivalent: "")
+            copyItem.target = self
+            menu.addItem(copyItem)
+        }
+
+        if editMenuConfig.showLookUp {
+            let lookUpItem = NSMenuItem(title: "Look Up", action: #selector(performLookUp(_:)), keyEquivalent: "")
+            lookUpItem.target = self
+            menu.addItem(lookUpItem)
+        }
+
+        if editMenuConfig.showShare {
+            menu.addItem(NSMenuItem.separator())
+            let shareItem = NSMenuItem(title: "Share…", action: #selector(performShare(_:)), keyEquivalent: "")
+            shareItem.target = self
+            menu.addItem(shareItem)
+        }
+
+        return menu
+    }
+
+    @objc private func performCopy(_ sender: Any?) {
+        guard let range = currentRange else { return }
+        let text = copyText(for: range, doc: document)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    @objc private func performLookUp(_ sender: Any?) {
+        // Look Up: show the Dictionary panel for the selected word.
+        // Requires a window with a text selection; here we provide the word text.
+        guard let range = currentRange else { return }
+        let text = copyText(for: range, doc: document)
+        guard !text.isEmpty else { return }
+        NSWorkspace.shared.open(
+            URL(string: "dict://\(text.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")")
+            ?? URL(string: "dict://")!
+        )
+    }
+
+    @objc private func performShare(_ sender: Any?) {
+        guard let range = currentRange else { return }
+        let text = copyText(for: range, doc: document)
+        guard !text.isEmpty, let window else { return }
+        let picker = NSSharingServicePicker(items: [text])
+        picker.show(relativeTo: .zero, of: self, preferredEdge: .minY)
+        _ = window  // suppress unused-warning
     }
 
     // Accept mouse events

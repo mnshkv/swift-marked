@@ -18,16 +18,28 @@ public protocol ImageProvider: Sendable {
 
 // MARK: - EditMenuConfig
 
-/// Configuration for the edit menu (copy, look up, etc.) shown on text selection.
+/// Configuration for the edit menu (Copy, Look Up, Share) shown when
+/// a text selection is active.
 ///
-/// Future waves will expand this with custom actions.
+/// Pass a custom value to `MarkdownTextView(editMenu:)` to hide individual
+/// menu items; use `.standard` to show all three.
 public struct EditMenuConfig: Sendable {
-    /// The standard system edit menu showing Copy, Look Up, and Share.
-    public static let standard = EditMenuConfig()
+    /// Whether the "Copy" action is visible in the edit menu.
+    public var showCopy: Bool
+    /// Whether the "Look Up" action is visible in the edit menu.
+    public var showLookUp: Bool
+    /// Whether the "Share…" action is visible in the edit menu.
+    public var showShare: Bool
 
-    // Private initialiser keeps the type nominally extensible without
-    // exposing raw storage in the public API surface.
-    private init() {}
+    /// Creates an `EditMenuConfig` with explicit visibility for each item.
+    public init(showCopy: Bool = true, showLookUp: Bool = true, showShare: Bool = true) {
+        self.showCopy = showCopy
+        self.showLookUp = showLookUp
+        self.showShare = showShare
+    }
+
+    /// The standard edit menu: Copy, Look Up, and Share are all enabled.
+    public static let standard = EditMenuConfig()
 }
 
 // MARK: - MarkdownTextView
@@ -88,7 +100,8 @@ public struct MarkdownTextView: View {
         _TextEngineRepresentable(
             document: document,
             isSelectable: isSelectable,
-            onLink: onLink
+            onLink: onLink,
+            editMenu: editMenu
         )
         // intrinsicContentSize from TextEngineView drives this view's natural height.
         .fixedSize(horizontal: false, vertical: true)
@@ -108,10 +121,12 @@ private struct _TextEngineRepresentable: UIViewRepresentable {
     let document: TextDocument
     let isSelectable: Bool
     let onLink: ((LinkPayload) -> Void)?
+    let editMenu: EditMenuConfig
 
     func makeUIView(context: Context) -> TextEngineView {
         let view = TextEngineView()
         view.document = document
+        view.editMenuConfig = editMenu
         // Tap gesture for link detection
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         view.addGestureRecognizer(tap)
@@ -120,6 +135,7 @@ private struct _TextEngineRepresentable: UIViewRepresentable {
 
     func updateUIView(_ uiView: TextEngineView, context: Context) {
         uiView.document = document
+        uiView.editMenuConfig = editMenu
         context.coordinator.onLink = onLink
         context.coordinator.view = uiView
     }
@@ -163,10 +179,12 @@ private struct _TextEngineRepresentable: NSViewRepresentable {
     let document: TextDocument
     let isSelectable: Bool
     let onLink: ((LinkPayload) -> Void)?
+    let editMenu: EditMenuConfig
 
     func makeNSView(context: Context) -> TextEngineView {
         let view = TextEngineView()
         view.document = document
+        view.editMenuConfig = editMenu
         // Click gesture for link detection
         let click = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleClick(_:)))
         view.addGestureRecognizer(click)
@@ -175,6 +193,7 @@ private struct _TextEngineRepresentable: NSViewRepresentable {
 
     func updateNSView(_ nsView: TextEngineView, context: Context) {
         nsView.document = document
+        nsView.editMenuConfig = editMenu
         context.coordinator.onLink = onLink
         context.coordinator.view = nsView
     }
