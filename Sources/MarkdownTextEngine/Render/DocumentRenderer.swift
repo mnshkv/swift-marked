@@ -23,6 +23,17 @@ public enum DocumentRenderer {
     private static let selectionBlue:  CGFloat = 0.97
     private static let selectionAlpha: CGFloat = 0.30
 
+    // MARK: - Pressed-link highlight color
+
+    /// RGBA components for the pressed-link highlight (Task 7.4).
+    /// A slightly darker blue at 50 % opacity — visually distinct from the
+    /// selection highlight and pixel-verifiable (blue channel > red channel,
+    /// higher alpha than selection highlight for a more prominent press state).
+    private static let pressedLinkRed:   CGFloat = 0.10
+    private static let pressedLinkGreen: CGFloat = 0.40
+    private static let pressedLinkBlue:  CGFloat = 0.90
+    private static let pressedLinkAlpha: CGFloat = 0.50
+
     // MARK: - Public API
 
     // MARK: - Image placeholder drawing constants
@@ -39,33 +50,39 @@ public enum DocumentRenderer {
     /// Draws `layout` into `ctx`.
     ///
     /// - Parameters:
-    ///   - layout:       The fully computed document layout.
-    ///   - ctx:          A Core Graphics context whose coordinate system has its
-    ///                   **origin at the bottom-left** (standard CG convention).
-    ///   - canvasHeight: The full height of the drawing surface (view's
-    ///                   `bounds.height`).  Used exclusively for the y-flip
-    ///                   transform so that document-space coordinates map
-    ///                   correctly onto the CG canvas regardless of scroll
-    ///                   position.
-    ///   - visible:      The rectangle (in document / view coordinates, y-down)
-    ///                   that is currently on screen.  Used ONLY for culling:
-    ///                   blocks that do not intersect this rectangle are skipped.
-    ///   - selection:    An array of rects (document coordinates) to fill with
-    ///                   the selection highlight color, drawn *behind* text.
-    ///   - images:       A resolved-image cache keyed by `ImageAttachment.source`.
-    ///                   Images present in this dict are drawn into the reserved rect.
-    ///                   Missing images produce a light-grey placeholder box instead.
-    ///                   This parameter is pure (no networking, no async) — callers
-    ///                   that do async loading pass the already-fetched `CGImage` here.
+    ///   - layout:           The fully computed document layout.
+    ///   - ctx:              A Core Graphics context whose coordinate system has its
+    ///                       **origin at the bottom-left** (standard CG convention).
+    ///   - canvasHeight:     The full height of the drawing surface (view's
+    ///                       `bounds.height`).  Used exclusively for the y-flip
+    ///                       transform so that document-space coordinates map
+    ///                       correctly onto the CG canvas regardless of scroll
+    ///                       position.
+    ///   - visible:          The rectangle (in document / view coordinates, y-down)
+    ///                       that is currently on screen.  Used ONLY for culling:
+    ///                       blocks that do not intersect this rectangle are skipped.
+    ///   - selection:        An array of rects (document coordinates) to fill with
+    ///                       the selection highlight color, drawn *behind* text.
+    ///   - pressedLinkRects: An array of rects (document coordinates) to fill with
+    ///                       the pressed-link highlight color (Task 7.4).  Drawn
+    ///                       behind text, visually distinct from the selection
+    ///                       highlight.  Pass `[]` (the default) when no link is
+    ///                       being pressed.
+    ///   - images:           A resolved-image cache keyed by `ImageAttachment.source`.
+    ///                       Images present in this dict are drawn into the reserved rect.
+    ///                       Missing images produce a light-grey placeholder box instead.
+    ///                       This parameter is pure (no networking, no async) — callers
+    ///                       that do async loading pass the already-fetched `CGImage` here.
     public static func draw(
         _ layout: DocumentLayout,
         in ctx: CGContext,
         canvasHeight: CGFloat,
         visible: CGRect,
         selection: [CGRect],
+        pressedLinkRects: [CGRect] = [],
         images: [String: CGImage] = [:]
     ) {
-        guard !layout.blocks.isEmpty || !selection.isEmpty else { return }
+        guard !layout.blocks.isEmpty || !selection.isEmpty || !pressedLinkRects.isEmpty else { return }
 
         // ------------------------------------------------------------------
         // Save graphics state so our transform does not leak to the caller.
@@ -87,7 +104,19 @@ public enum DocumentRenderer {
         ctx.scaleBy(x: 1, y: -1)
 
         // ------------------------------------------------------------------
-        // 1. Draw selection highlight rects (behind text)
+        // 1. Draw pressed-link highlight rects (behind text and selection)
+        // ------------------------------------------------------------------
+        if !pressedLinkRects.isEmpty {
+            ctx.setFillColor(red: pressedLinkRed, green: pressedLinkGreen,
+                             blue: pressedLinkBlue, alpha: pressedLinkAlpha)
+            for rect in pressedLinkRects {
+                guard rect.intersects(visible) else { continue }
+                ctx.fill(rect)
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // 2. Draw selection highlight rects (behind text)
         // ------------------------------------------------------------------
         if !selection.isEmpty {
             ctx.setFillColor(red: selectionRed, green: selectionGreen, blue: selectionBlue, alpha: selectionAlpha)
@@ -99,7 +128,7 @@ public enum DocumentRenderer {
         }
 
         // ------------------------------------------------------------------
-        // 2. Draw blocks (text, list markers, quote bars, and nested layouts)
+        // 3. Draw blocks (text, list markers, quote bars, and nested layouts)
         // ------------------------------------------------------------------
         drawBlocks(layout.blocks, in: ctx, visible: visible, images: images)
 

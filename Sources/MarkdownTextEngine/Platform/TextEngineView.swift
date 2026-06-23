@@ -46,6 +46,11 @@ public final class TextEngineView: UIView {
     /// The current text selection range (used for drag selection).
     private var currentRange: TextRange? = nil
 
+    /// Rects to draw as pressed-link highlight (Task 7.4). Document coordinates.
+    private var pressedLinkRects: [CGRect] = [] {
+        didSet { setNeedsDisplay() }
+    }
+
     // MARK: - Initialisation
 
     public override init(frame: CGRect) {
@@ -172,12 +177,33 @@ public final class TextEngineView: UIView {
         docLayout.contentSize
     }
 
+    // MARK: - Pressed-link tracking (Task 7.4)
+
+    public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(touches, with: event)
+        guard let touch = touches.first else { return }
+        let pt = touch.location(in: self)
+        if let (_, range) = linkRange(at: pt, layout: docLayout, doc: document) {
+            pressedLinkRects = selectionRects(for: range, in: docLayout, doc: document)
+        }
+    }
+
+    public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesEnded(touches, with: event)
+        pressedLinkRects = []
+    }
+
+    public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesCancelled(touches, with: event)
+        pressedLinkRects = []
+    }
+
     // MARK: - Drawing
 
     public override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         DocumentRenderer.draw(docLayout, in: ctx, canvasHeight: bounds.height, visible: rect,
-                              selection: currentSelectionRects)
+                              selection: currentSelectionRects, pressedLinkRects: pressedLinkRects)
         // Task 7.2: draw selection handle knobs when there is a non-empty selection.
         if currentSelectionRects.count >= 1 {
             drawSelectionHandles(in: ctx, selectionRects: currentSelectionRects,
@@ -343,6 +369,11 @@ public final class TextEngineView: NSView {
     /// The current active text selection range (drag or double-click). Used by the edit menu.
     private var currentRange: TextRange? = nil
 
+    /// Rects to draw as pressed-link highlight (Task 7.4). Document coordinates.
+    private var pressedLinkRects: [CGRect] = [] {
+        didSet { needsDisplay = true }
+    }
+
     /// Cache of resolved CGImages keyed by source string.
     /// Populated asynchronously by `loadImages()` after each layout.
     private var imageCache: [String: CGImage] = [:]
@@ -375,14 +406,22 @@ public final class TextEngineView: NSView {
     public override func mouseDown(with event: NSEvent) {
         let pt = toDocPoint(convert(event.locationInWindow, from: nil))
 
-        // Double-click → word selection (Task 7.1).
+        // Double-click → word selection (Task 7.1). No link highlight on double-click.
         if event.clickCount == 2 {
+            pressedLinkRects = []
             let range = wordSelection(at: pt, layout: docLayout, doc: document)
             currentWordRange = range
             currentRange = range
             currentSelectionRects = selectionRects(for: range, in: docLayout, doc: document)
             dragAnchor = nil
             return
+        }
+
+        // Task 7.4: highlight link on mouse-down.
+        if let (_, linkRng) = linkRange(at: pt, layout: docLayout, doc: document) {
+            pressedLinkRects = selectionRects(for: linkRng, in: docLayout, doc: document)
+        } else {
+            pressedLinkRects = []
         }
 
         currentWordRange = nil
@@ -400,6 +439,8 @@ public final class TextEngineView: NSView {
     }
 
     public override func mouseUp(with event: NSEvent) {
+        // Task 7.4: clear pressed-link highlight on release.
+        pressedLinkRects = []
         guard let anchor = dragAnchor else { return }
         let pt = toDocPoint(convert(event.locationInWindow, from: nil))
         let activePos = position(at: pt, in: docLayout, doc: document)
@@ -561,6 +602,7 @@ public final class TextEngineView: NSView {
             canvasHeight: bounds.height,
             visible: visibleRect,
             selection: currentSelectionRects,
+            pressedLinkRects: pressedLinkRects,
             images: imageCache
         )
         // Task 7.2: draw selection handle knobs when there is a non-empty selection.
