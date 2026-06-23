@@ -20,15 +20,13 @@ struct StyleContext {
 
     func heading(_ level: Int) -> TextStyle {
         let clamped = max(1, min(6, level))
+        let i = clamped - 1
+        let size = (i < style.headingSizes.count) ? style.headingSizes[i] : (style.headingSizes.last ?? style.baseFontSize)
         return TextStyle(
-            fontSize: style.headingSizes[clamped - 1],
+            fontSize: size,
             isBold: true,
             color: palette.text
         )
-    }
-
-    var inlineCode: TextStyle {
-        TextStyle(fontSize: style.codeFontSize, isMonospace: true, color: palette.code)
     }
 
     var codeBlock: TextStyle {
@@ -55,13 +53,6 @@ struct StyleContext {
         ParagraphStyle(
             spacingBefore: style.spacing.headingBefore,
             spacingAfter: style.spacing.headingAfter
-        )
-    }
-
-    func indentedParagraph(_ indent: CGFloat) -> ParagraphStyle {
-        ParagraphStyle(
-            spacingAfter: style.spacing.paragraphAfter,
-            leadingIndent: indent
         )
     }
 }
