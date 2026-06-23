@@ -5,29 +5,6 @@ import CoreGraphics
 
 // MARK: - Helpers
 
-private func pixel(at x: Int, y: Int, width: Int, buffer: UnsafeMutableRawPointer)
-    -> (r: UInt8, g: UInt8, b: UInt8, a: UInt8)
-{
-    let offset = (y * width + x) * 4
-    let p = buffer.assumingMemoryBound(to: UInt8.self)
-    return (p[offset], p[offset + 1], p[offset + 2], p[offset + 3])
-}
-
-private func makeWhiteContext(width: Int, height: Int)
-    -> (ctx: CGContext, buffer: UnsafeMutableRawPointer)?
-{
-    let bytesPerRow = width * 4
-    let rawBuffer = UnsafeMutableRawPointer.allocate(byteCount: height * bytesPerRow, alignment: 16)
-    rawBuffer.initializeMemory(as: UInt8.self, repeating: 0xFF, count: height * bytesPerRow)
-    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-          let ctx = CGContext(data: rawBuffer, width: width, height: height,
-                              bitsPerComponent: 8, bytesPerRow: bytesPerRow,
-                              space: colorSpace,
-                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-    else { rawBuffer.deallocate(); return nil }
-    return (ctx, rawBuffer)
-}
-
 private func textStyle() -> TextStyle {
     TextStyle(fontSize: 14, color: CGColor(red: 0, green: 0, blue: 0, alpha: 1))
 }

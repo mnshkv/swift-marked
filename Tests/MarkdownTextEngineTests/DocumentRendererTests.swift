@@ -3,15 +3,6 @@ import CoreText
 import CoreGraphics
 @testable import MarkdownTextEngine
 
-// MARK: - Pixel-level snapshot assertions
-
-/// Reads one RGBA pixel from a raw RGBA8 bitmap buffer.
-private func pixel(at x: Int, y: Int, width: Int, buffer: UnsafeMutableRawPointer) -> (r: UInt8, g: UInt8, b: UInt8, a: UInt8) {
-    let offset = (y * width + x) * 4
-    let p = buffer.assumingMemoryBound(to: UInt8.self)
-    return (p[offset], p[offset + 1], p[offset + 2], p[offset + 3])
-}
-
 // MARK: - Test helpers
 
 /// Builds a one-line "Hello World" layout in a 400×60 document space.
@@ -23,32 +14,6 @@ private func makeOneParaLayout() -> (layout: DocumentLayout, doc: TextDocument) 
     ])
     let layout = LayoutEngine.layout(doc, width: 400)
     return (layout, doc)
-}
-
-/// Creates a 400×60 RGBA8 CGContext pre-filled with white.
-private func makeWhiteContext(width: Int = 400, height: Int = 60)
-    -> (ctx: CGContext, buffer: UnsafeMutableRawPointer)?
-{
-    let bytesPerRow = width * 4
-    let bufferSize = height * bytesPerRow
-    let rawBuffer = UnsafeMutableRawPointer.allocate(byteCount: bufferSize, alignment: 16)
-    // Fill white (0xFF each channel)
-    rawBuffer.initializeMemory(as: UInt8.self, repeating: 0xFF, count: bufferSize)
-
-    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-          let ctx = CGContext(
-            data: rawBuffer,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: bytesPerRow,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-          ) else {
-        rawBuffer.deallocate()
-        return nil
-    }
-    return (ctx, rawBuffer)
 }
 
 // MARK: - Tests
