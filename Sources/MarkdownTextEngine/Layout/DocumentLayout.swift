@@ -70,4 +70,25 @@ public struct DocumentLayout {
     public init(blocks: [BlockFrame], contentSize: CGSize) {
         self.blocks = blocks; self.contentSize = contentSize
     }
+
+    /// Returns the indices of blocks whose bounding rect intersects `visible`.
+    /// Used for windowed draw culling and for testing that off-screen blocks are skipped.
+    public func visibleBlockIndices(in visible: CGRect) -> [Int] {
+        blocks.enumerated().compactMap { (i, block) in
+            blockRect(block).intersects(visible) ? i : nil
+        }
+    }
+
+    /// Returns the bounding rect of a `BlockFrame` in document space.
+    public func blockRect(_ frame: BlockFrame) -> CGRect {
+        switch frame {
+        case .text(let rect, _): return rect
+        case .rule(let rect): return rect
+        case .image(let rect, _): return rect
+        case .list(let rect, _, _, _): return rect
+        case .quote(let rect, _, _): return rect
+        case .table(let rect, _, _, _, _): return rect
+        case .code(let rect, _, _, _): return rect
+        }
+    }
 }
