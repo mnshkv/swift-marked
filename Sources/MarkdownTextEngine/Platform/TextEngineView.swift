@@ -658,15 +658,21 @@ public final class TextEngineView: NSView {
 
     // MARK: - Drawing
 
+    /// Converts an NSView y-up dirty rect into document space (y-down) so it can
+    /// serve as the renderer's cull rect. The block frames the renderer culls
+    /// against live in document space; without this conversion a partial dirty
+    /// rect culls the wrong blocks. See `draw(_:)`.
+    nonisolated static func documentVisibleRect(_ dirtyRect: CGRect, boundsHeight: CGFloat) -> CGRect {
+        CGRect(x: dirtyRect.minX, y: boundsHeight - dirtyRect.maxY,
+               width: dirtyRect.width, height: dirtyRect.height)
+    }
+
     public override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-        // On AppKit, NSView draws with y-up (bottom-left origin) by default.
-        // DocumentRenderer's draw() applies the y-flip internally using
-        // canvasHeight (the full bounds height), not the dirty rect height.
-        // We pass dirtyRect as `visible` so the renderer culls off-screen
-        // blocks correctly.
-        let visibleRect = CGRect(origin: dirtyRect.origin,
-                                 size: CGSize(width: dirtyRect.width, height: dirtyRect.height))
+        // NSView draws y-up; DocumentRenderer culls block frames in document space
+        // (y-down). Convert the dirtyRect, or a partial dirtyRect (e.g. inside a
+        // scroll view) culls the wrong blocks and whole sections vanish.
+        let visibleRect = Self.documentVisibleRect(dirtyRect, boundsHeight: bounds.height)
         DocumentRenderer.draw(
             docLayout,
             in: ctx,
