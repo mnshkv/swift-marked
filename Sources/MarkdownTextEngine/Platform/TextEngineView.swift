@@ -33,9 +33,15 @@ public final class TextEngineView: UIView {
     /// Edit menu configuration (Task 7.3). Updated by the SwiftUI representable.
     public var editMenuConfig: EditMenuConfig = .standard
 
-    /// When false, drag-selection, long-press, and double-tap selection are disabled.
+    /// When false, drag-selection, long-press, and double-tap selection are disabled
+    /// (the selection gesture recognizers are turned off, so swipes always scroll).
     /// Link taps remain active regardless.
-    public var isSelectable: Bool = true
+    public var isSelectable: Bool = true {
+        didSet { selectionGestures.forEach { $0.isEnabled = isSelectable } }
+    }
+
+    /// The selection gesture recognizers (long-press, double-tap), toggled by `isSelectable`.
+    private var selectionGestures: [UIGestureRecognizer] = []
 
     // MARK: - Internal state (accessible within the module for representable coordination)
 
@@ -76,12 +82,14 @@ public final class TextEngineView: UIView {
 
     public override init(frame: CGRect) {
         super.init(frame: frame)
+        backgroundColor = .systemBackground
         setupDragSelection()
         setupEditMenu()
     }
 
     public required init?(coder: NSCoder) {
         super.init(coder: coder)
+        backgroundColor = .systemBackground
         setupDragSelection()
         setupEditMenu()
     }
@@ -89,17 +97,17 @@ public final class TextEngineView: UIView {
     // MARK: - Drag selection setup
 
     private func setupDragSelection() {
-        // Long-press begins the selection; panning extends it.
-        // We use a LongPressGestureRecognizer + a UIPanGestureRecognizer in parallel.
+        // Selection is gated behind a long-press, so a plain swipe scrolls an
+        // enclosing scroll view instead of selecting: hold to start selecting,
+        // then keep dragging to extend. (A standalone pan recognizer would claim
+        // every swipe and block scrolling.) The long-press fails on fast movement
+        // past its allowableMovement, letting the scroll view take the gesture.
         let longPress = UILongPressGestureRecognizer(
             target: self,
             action: #selector(handleLongPress(_:))
         )
         longPress.minimumPressDuration = 0.4
         addGestureRecognizer(longPress)
-
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
-        addGestureRecognizer(pan)
 
         // Double-tap for word selection (Task 7.1).
         let doubleTap = UITapGestureRecognizer(
@@ -108,6 +116,8 @@ public final class TextEngineView: UIView {
         )
         doubleTap.numberOfTapsRequired = 2
         addGestureRecognizer(doubleTap)
+
+        selectionGestures = [longPress, doubleTap]
     }
 
     // MARK: - Double-tap word selection (Task 7.1)
@@ -140,41 +150,35 @@ public final class TextEngineView: UIView {
 
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         guard isSelectable else { return }
-        guard gesture.state == .began else { return }
         let pt = gesture.location(in: self)
-
-        // If a selection already exists, show the edit menu at the long-press point.
-        if let range = currentRange, range.start.index < range.end.index {
-            if #available(iOS 16, *) {
-                let config = UIEditMenuConfiguration(identifier: nil, sourcePoint: pt)
-                _editMenuInteraction?.presentEditMenu(with: config)
+        switch gesture.state {
+        case .began:
+            // Hold selects the word under the press; dragging then extends it.
+            let pos = position(at: pt, in: docLayout, doc: document)
+            currentRange = wordRange(at: pos, doc: document)
+            updateSelectionRects()
+        case .changed:
+            // Extend the selection from its anchor (start) to the current point.
+            guard let range = currentRange else { return }
+            let endPos = position(at: pt, in: docLayout, doc: document)
+            currentRange = TextRange(start: range.start, end: endPos)
+            updateSelectionRects()
+        case .ended:
+            // Present the edit menu over the resulting non-empty selection.
+            if let range = currentRange, range.start.index < range.end.index {
+                presentEditMenu(at: pt)
             }
-            return
+        default:
+            break
         }
-
-        let pos = position(at: pt, in: docLayout, doc: document)
-        // Start a word-selection at the long-pressed position.
-        let wordRng = wordRange(at: pos, doc: document)
-        currentRange = wordRng
-        updateSelectionRects()
     }
 
-    @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
-        guard isSelectable else { return }
-        guard gesture.state == .changed || gesture.state == .ended else {
-            if gesture.state == .cancelled { clearSelection(); return }
-            return
+    /// Presents the edit menu at `point` over the current selection (iOS 16+).
+    private func presentEditMenu(at point: CGPoint) {
+        if #available(iOS 16, *) {
+            let config = UIEditMenuConfiguration(identifier: nil, sourcePoint: point)
+            _editMenuInteraction?.presentEditMenu(with: config)
         }
-        guard let existingRange = currentRange else { return }
-        let pt = gesture.location(in: self)
-        let endPos = position(at: pt, in: docLayout, doc: document)
-        currentRange = TextRange(start: existingRange.start, end: endPos)
-        updateSelectionRects()
-    }
-
-    private func clearSelection() {
-        currentRange = nil
-        currentSelectionRects = []
     }
 
     private func updateSelectionRects() {
