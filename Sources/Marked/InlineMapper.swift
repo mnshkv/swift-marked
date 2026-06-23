@@ -34,6 +34,16 @@ enum InlineMapper {
     }
 
     static func merge(_ runs: [InlineRun]) -> [InlineRun] {
-        runs
+        var result: [InlineRun] = []
+        for run in runs {
+            if case .text(let newStr, let newStyle) = run,
+               case .text(let lastStr, let lastStyle) = result.last,
+               newStyle == lastStyle {
+                result[result.count - 1] = .text(lastStr + newStr, lastStyle)
+            } else {
+                result.append(run)
+            }
+        }
+        return result
     }
 }
