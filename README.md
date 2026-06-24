@@ -67,8 +67,48 @@ struct ContentView: View {
 
 Links are opened via the SwiftUI environment's `openURL` action by default, or
 you can supply an `onLink: (URL) -> Void` closure. Images are loaded
-asynchronously via an `ImageProvider` you provide. Styling is controlled by
-`MarkdownStyle` (font sizes, spacing, colours).
+asynchronously via an `ImageProvider` you provide.
+
+### Customizing the style
+
+`MarkdownStyle` is a plain value type with public, mutable fields. The easiest
+way to customize is to start from `.default` and change only what you need, then
+pass it to `MarkdownView(_:style:)`:
+
+```swift
+import Marked
+
+var style = MarkdownStyle.default
+
+style.baseFontSize = 16                       // body text size
+style.headingSizes = [30, 24, 20, 17, 15, 14] // h1…h6 (always 6 values)
+style.codeFontSize = 13                        // monospace code
+style.spacing.paragraphAfter = 12              // gap below paragraphs
+style.spacing.headingBefore = 18
+
+// Colors are CGColor; light and dark are independent palettes.
+style.light.link = CGColor(srgbRed: 0.80, green: 0.20, blue: 0.20, alpha: 1) // brand red
+style.dark.link  = CGColor(srgbRed: 1.00, green: 0.45, blue: 0.45, alpha: 1)
+style.light.text = CGColor(srgbRed: 0.10, green: 0.10, blue: 0.12, alpha: 1)
+
+MarkdownView(markdownString, style: style)
+```
+
+The renderer picks `style.light` or `style.dark` automatically from the
+SwiftUI `\.colorScheme` environment and re-renders on change.
+
+**Fields:** `baseFontSize`, `headingSizes` (6 values, h1–h6, rendered bold),
+`codeFontSize`, `footnoteFontSize`, `inlineImageSize`, `blockImage` (reserved
+size for a standalone image), `light` / `dark` palettes
+(`text` · `secondary` · `link` · `code` · `rule`), and `spacing`
+(`paragraphAfter` · `headingBefore` · `headingAfter` · `definitionIndent`).
+
+You can also build a `MarkdownStyle` from scratch with its memberwise
+initializer if you prefer not to derive from `.default`.
+
+**Not yet style-driven (v1):** fonts are the system family (SF / SF Mono — no
+custom font family); the quote bar color, code-block background tint, and
+list-marker color use the engine's built-in defaults.
 
 ### Display it (text engine)
 
