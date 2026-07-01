@@ -104,6 +104,15 @@ public enum DocumentRenderer {
         ctx.scaleBy(x: 1, y: -1)
 
         // ------------------------------------------------------------------
+        // 0. Draw custom-rule pill backgrounds FIRST, beneath everything else
+        //    (pressed-link / selection highlights, then glyphs). This pre-pass
+        //    mirrors drawBlocks' recursion but only touches the block kinds
+        //    that can carry run backgrounds today (.text, .list, .quote), so
+        //    pill LOCATION is unchanged — only z-order changes.
+        // ------------------------------------------------------------------
+        drawRunBackgroundPass(layout.blocks, in: ctx, visible: visible)
+
+        // ------------------------------------------------------------------
         // 1. Draw pressed-link highlight rects (behind text and selection)
         // ------------------------------------------------------------------
         if !pressedLinkRects.isEmpty {
@@ -136,6 +145,40 @@ public enum DocumentRenderer {
     }
 
     // MARK: - Private drawing helpers
+
+    /// Recursively draws ONLY the run-background pills for blocks that can carry
+    /// them (`.text`, `.list`, `.quote`), so pills paint beneath the pressed-link
+    /// and selection highlights (which are filled next) and beneath the glyphs
+    /// (drawn later, on top, by `drawTextLines`). `.table`, `.code`, `.image`,
+    /// and `.rule` never carried pills and are intentionally skipped here, to
+    /// keep parity with prior behavior.
+    private static func drawRunBackgroundPass(
+        _ blocks: [BlockFrame],
+        in ctx: CGContext,
+        visible: CGRect
+    ) {
+        for block in blocks {
+            switch block {
+            case .text(_, let lines):
+                for line in lines {
+                    let lineRect = CGRect(origin: line.origin, size: line.size)
+                    guard lineRect.intersects(visible) else { continue }
+                    drawRunBackgrounds(for: line, in: ctx)
+                }
+
+            case .list(_, let itemLayouts, _, _):
+                for itemLayout in itemLayouts {
+                    drawRunBackgroundPass(itemLayout.blocks, in: ctx, visible: visible)
+                }
+
+            case .quote(_, let innerLayout, _):
+                drawRunBackgroundPass(innerLayout.blocks, in: ctx, visible: visible)
+
+            case .table, .code, .image, .rule:
+                continue
+            }
+        }
+    }
 
     /// Draws all blocks in `blocks`, handling text, lists, and quotes recursively.
     private static func drawBlocks(
@@ -228,11 +271,20 @@ public enum DocumentRenderer {
         ctx.fill(CGRect(x: rect.maxX - t, y: rect.minY, width: t, height: rect.height))    // right
     }
 
+    /// Corner radius of the custom-rule pill background, in points.
+    private static let pillCornerRadius: CGFloat = 4
+    /// Horizontal padding added on each side of a pill background, in points.
+    private static let pillPaddingH: CGFloat = 3
+
     /// Draws CoreText lines from a `.text` block.
     private static func drawTextLines(_ lines: [LineFrame], in ctx: CGContext, visible: CGRect) {
         for line in lines {
             let lineRect = CGRect(origin: line.origin, size: line.size)
             guard lineRect.intersects(visible) else { continue }
+
+            // Pills are drawn earlier, in drawRunBackgroundPass (before the
+            // pressed-link/selection highlights), so they sit beneath those
+            // highlights. Glyphs paint here, last, on top of everything.
 
             // Baseline in document (y-down) space: origin.y + ascent.
             // The flip transform applied by the caller converts this to CG space correctly.
@@ -243,6 +295,40 @@ public enum DocumentRenderer {
             ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
             ctx.textPosition = baseline
             CTLineDraw(line.ctLine, ctx)
+        }
+    }
+
+    /// Fills a rounded "pill" behind any CTRun carrying the
+    /// `markedBackgroundAttributeName` attribute. Operates in the caller's
+    /// already-y-flipped document space (same convention as selection rects).
+    private static func drawRunBackgrounds(for line: LineFrame, in ctx: CGContext) {
+        let runs = CTLineGetGlyphRuns(line.ctLine) as! [CTRun]
+        for run in runs {
+            let attrs = CTRunGetAttributes(run)
+            let keyPtr = Unmanaged.passUnretained(markedBackgroundAttributeName).toOpaque()
+            // CFDictionary key matching is content-based (default CFEqual), so a
+            // fresh CFString literal with the same contents matches this key —
+            // pointer identity is not required. A CGColor is never legitimately
+            // stored as a null value, so a single lookup is equivalent to the
+            // contains-then-get pair and avoids a redundant dictionary probe.
+            guard let valuePtr = CFDictionaryGetValue(attrs, keyPtr) else { continue }
+            let color = Unmanaged<CGColor>.fromOpaque(valuePtr).takeUnretainedValue()
+
+            let range = CTRunGetStringRange(run)
+            let startX = CTLineGetOffsetForStringIndex(line.ctLine, range.location, nil)
+            let endX = CTLineGetOffsetForStringIndex(line.ctLine, range.location + range.length, nil)
+
+            let rect = CGRect(
+                x: line.origin.x + min(startX, endX) - pillPaddingH,
+                y: line.origin.y,
+                width: abs(endX - startX) + 2 * pillPaddingH,
+                height: line.size.height
+            )
+            let path = CGPath(roundedRect: rect, cornerWidth: pillCornerRadius,
+                              cornerHeight: pillCornerRadius, transform: nil)
+            ctx.addPath(path)
+            ctx.setFillColor(color)
+            ctx.fillPath()
         }
     }
 

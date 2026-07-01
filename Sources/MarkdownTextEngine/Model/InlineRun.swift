@@ -7,10 +7,13 @@ public struct TextStyle: Equatable, Sendable {
     public var isStrikethrough: Bool
     public var isMonospace: Bool
     public var color: CGColor
+    public var background: CGColor?
     public init(fontSize: CGFloat, isBold: Bool = false, isItalic: Bool = false,
-                isStrikethrough: Bool = false, isMonospace: Bool = false, color: CGColor) {
+                isStrikethrough: Bool = false, isMonospace: Bool = false,
+                color: CGColor, background: CGColor? = nil) {
         self.fontSize = fontSize; self.isBold = isBold; self.isItalic = isItalic
-        self.isStrikethrough = isStrikethrough; self.isMonospace = isMonospace; self.color = color
+        self.isStrikethrough = isStrikethrough; self.isMonospace = isMonospace
+        self.color = color; self.background = background
     }
 }
 

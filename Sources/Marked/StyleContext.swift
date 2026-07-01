@@ -6,10 +6,12 @@ struct StyleContext {
 
     let style: MarkdownStyle
     let palette: MarkdownStyle.Palette
+    let rules: [InlineRule]
 
-    init(_ style: MarkdownStyle, _ scheme: MarkdownColorScheme) {
+    init(_ style: MarkdownStyle, _ scheme: MarkdownColorScheme, rules: [InlineRule] = []) {
         self.style = style
         self.palette = scheme == .light ? style.light : style.dark
+        self.rules = rules
     }
 
     // MARK: - Text styles

@@ -29,7 +29,7 @@ import SwiftUI
 ///   weight/size/monospaced trait; custom font families are not supported.
 /// - **`softBreak` → space** — a soft line break in the source (`\n` inside a
 ///   paragraph) is rendered as a single space, not as a visible line break.
-@available(iOS 26, macOS 14, *)
+@available(iOS 17, macOS 14, *)
 @MainActor
 public struct MarkdownView: View {
 
@@ -40,6 +40,8 @@ public struct MarkdownView: View {
     private let images: (any ImageProvider)?
     private let isSelectable: Bool
     private let onLink: ((URL) -> Void)?
+    private let rules: [InlineRule]
+    private let onCustomTap: ((CustomInlineTap) -> Void)?
 
     // MARK: - Environment
 
@@ -55,27 +57,33 @@ public struct MarkdownView: View {
     ///   - style:        The visual style to apply (default `.default`).
     ///   - images:       Optional image provider for inline images.
     ///   - isSelectable: Whether the user can select text (default `true`).
+    ///   - rules:        Custom inline rules to apply during parsing (default `[]`).
     ///   - onLink:       Called when the user taps a link whose token resolves to a URL.
     ///                   If `nil`, links are opened with the environment `openURL` action.
+    ///   - onCustomTap:  Called when the user taps a span produced by a custom inline rule.
     public init(
         _ markdown: String,
         style: MarkdownStyle = .default,
         images: (any ImageProvider)? = nil,
         isSelectable: Bool = true,
-        onLink: ((URL) -> Void)? = nil
+        rules: [InlineRule] = [],
+        onLink: ((URL) -> Void)? = nil,
+        onCustomTap: ((CustomInlineTap) -> Void)? = nil
     ) {
         self.markdown = markdown
         self.style = style
         self.images = images
         self.isSelectable = isSelectable
+        self.rules = rules
         self.onLink = onLink
+        self.onCustomTap = onCustomTap
     }
 
     // MARK: - Body
 
     public var body: some View {
         let scheme: MarkdownColorScheme = (colorScheme == .dark) ? .dark : .light
-        let doc = MarkdownRenderer.render(markdown, style: style, colorScheme: scheme)
+        let doc = MarkdownRenderer.render(markdown, style: style, colorScheme: scheme, rules: rules)
         MarkdownTextView(doc, isSelectable: isSelectable, onLink: { handleLink($0) }, images: images)
     }
 
@@ -89,6 +97,8 @@ public struct MarkdownView: View {
             } else {
                 openURL(u)
             }
+        case .custom(let ruleID, let value):
+            onCustomTap?(CustomInlineTap(ruleID: ruleID, value: value))
         case .footnote, .ignore:
             break
         }
@@ -152,7 +162,7 @@ struct ContentView: View {
 ![Sample image](sample)
 """
 
-@available(iOS 26, macOS 14, *)
+@available(iOS 17, macOS 14, *)
 #Preview("MarkdownView") {
     ScrollView {
         MarkdownView(

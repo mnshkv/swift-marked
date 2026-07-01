@@ -2,7 +2,7 @@
 import PackageDescription
 let package = Package(
     name: "swift-marked",
-    platforms: [.iOS("26.0"), .macOS("14.0")],
+    platforms: [.iOS("17.0"), .macOS("14.0")],
     products: [
         .library(name: "MarkdownAST", targets: ["MarkdownAST"]),
         .library(name: "MarkdownTextEngine", targets: ["MarkdownTextEngine"]),
