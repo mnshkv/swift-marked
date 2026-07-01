@@ -29,7 +29,7 @@ import SwiftUI
 ///   weight/size/monospaced trait; custom font families are not supported.
 /// - **`softBreak` → space** — a soft line break in the source (`\n` inside a
 ///   paragraph) is rendered as a single space, not as a visible line break.
-@available(iOS 26, macOS 14, *)
+@available(iOS 17, macOS 14, *)
 @MainActor
 public struct MarkdownView: View {
 
@@ -152,7 +152,7 @@ struct ContentView: View {
 ![Sample image](sample)
 """
 
-@available(iOS 26, macOS 14, *)
+@available(iOS 17, macOS 14, *)
 #Preview("MarkdownView") {
     ScrollView {
         MarkdownView(
