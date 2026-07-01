@@ -5,20 +5,26 @@ enum InlineMapper {
         _ nodes: [MarkdownInline],
         base: TextStyle,
         ctx: StyleContext,
-        footnotes: [String: Int]
+        footnotes: [String: Int],
+        suppressRules: Bool = false
     ) -> [InlineRun] {
         var runs: [InlineRun] = []
         for node in nodes {
             switch node {
-            case .text(let s): runs.append(.text(s, base))
-            case .emphasis(let c):       var st = base; st.isItalic = true;        runs += map(c, base: st, ctx: ctx, footnotes: footnotes)
-            case .strong(let c):         var st = base; st.isBold = true;          runs += map(c, base: st, ctx: ctx, footnotes: footnotes)
-            case .strikethrough(let c):  var st = base; st.isStrikethrough = true; runs += map(c, base: st, ctx: ctx, footnotes: footnotes)
+            case .text(let s):
+                if suppressRules || ctx.rules.isEmpty {
+                    runs.append(.text(s, base))
+                } else {
+                    runs += InlineRuleEngine.apply(s, rules: ctx.rules, base: base, ctx: ctx)
+                }
+            case .emphasis(let c):       var st = base; st.isItalic = true;        runs += map(c, base: st, ctx: ctx, footnotes: footnotes, suppressRules: suppressRules)
+            case .strong(let c):         var st = base; st.isBold = true;          runs += map(c, base: st, ctx: ctx, footnotes: footnotes, suppressRules: suppressRules)
+            case .strikethrough(let c):  var st = base; st.isStrikethrough = true; runs += map(c, base: st, ctx: ctx, footnotes: footnotes, suppressRules: suppressRules)
             case .code(let s):
                 var st = base; st.isMonospace = true; st.color = ctx.palette.code; st.fontSize = ctx.style.codeFontSize
                 runs.append(.text(s, st))
             case .link(let dest, _, let c):
-                runs.append(.link(runs: map(c, base: ctx.linkColored(base), ctx: ctx, footnotes: footnotes), payload: LinkPayload(dest)))
+                runs.append(.link(runs: map(c, base: ctx.linkColored(base), ctx: ctx, footnotes: footnotes, suppressRules: true), payload: LinkPayload(dest)))
             case .image(let src, _, let alt):
                 runs.append(.inlineImage(ImageAttachment(source: src, intrinsicSize: ctx.style.inlineImageSize, alt: alt)))
             case .autolink(let url):
