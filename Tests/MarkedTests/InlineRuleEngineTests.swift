@@ -102,4 +102,15 @@ struct InlineRuleEngineTests {
         guard case .text(let disp, _) = runs.first else { Issue.record("text"); return }
         #expect(disp == "x")
     }
+
+    @Test("precedence fall-through: first same-trigger rule fails to match, second succeeds")
+    func precedenceFallThrough() {
+        let strict = InlineRule(id: "first", trigger: "#", closing: ";",
+            output: .styledText(InlineDecoration(isBold: true)))
+        let loose = InlineRule(id: "second", trigger: "#",
+            output: .styledText(InlineDecoration(isItalic: true)))
+        let runs = apply("#x", [strict, loose])
+        guard case .link(_, let payload) = runs.first else { Issue.record("link"); return }
+        #expect(InlineRuleToken.decode(payload.token)?.ruleID == "second")
+    }
 }
