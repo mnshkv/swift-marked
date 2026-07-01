@@ -1,5 +1,4 @@
 import Testing
-import CoreGraphics
 @testable import Marked
 
 @Suite("InlineRule public types")

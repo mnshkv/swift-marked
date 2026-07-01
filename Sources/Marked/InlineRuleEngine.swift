@@ -29,7 +29,7 @@ enum InlineRuleEngine {
             var matched = false
             // First rule (array order = precedence) that matches at i wins.
             for rule in rules where rule.trigger == c {
-                if rule.requiresLeadingBoundary, i > 0, isWordChar(chars[i - 1]) {
+                if rule.requiresLeadingBoundary, i > 0, InlineRule.BodyClass.word.contains(chars[i - 1]) {
                     continue
                 }
                 guard let m = match(rule, chars, from: i) else { continue }
@@ -48,10 +48,6 @@ enum InlineRuleEngine {
     }
 
     // MARK: - Matching
-
-    private static func isWordChar(_ c: Character) -> Bool {
-        c.isLetter || c.isNumber || c == "_"
-    }
 
     /// Attempts to match `rule` at `start` (the trigger char). Returns the body
     /// text and the index just past the whole match.
